@@ -25,6 +25,7 @@ func main() {
 	routes.ProtectedRoutes(r)
 	routes.SubscriptionRoutes(r)
 	routes.CustomerRoutes(r)
+	routes.WaterRateRoutes(r)
 
 	r.Run()
 }

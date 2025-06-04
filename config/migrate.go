@@ -10,5 +10,6 @@ func Migrate() {
 		&models.User{},
 		&models.SubscriptionType{},
 		&models.Customer{},
+		&models.WaterRate{},
 	)
 }
