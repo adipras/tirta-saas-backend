@@ -23,6 +23,7 @@ func main() {
 
 	routes.AuthRoutes(r)
 	routes.ProtectedRoutes(r)
+	routes.SubscriptionRoutes(r)
 
 	r.Run()
 }
