@@ -9,5 +9,6 @@ func Migrate() {
 		&models.Tenant{},
 		&models.User{},
 		&models.SubscriptionType{},
+		&models.Customer{},
 	)
 }
