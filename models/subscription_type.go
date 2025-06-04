@@ -10,6 +10,8 @@ type SubscriptionType struct {
 	Name        string    `gorm:"not null" json:"name"`
 	Description string    `json:"description"`
 	TenantID    uuid.UUID `gorm:"type:char(36);not null;index" json:"tenant_id"`
+
+	SubscriptionFee float64 `gorm:"not null;default:0" json:"subscription_fee"`
 }
 
 func (s *SubscriptionType) BeforeCreate(tx *gorm.DB) (err error) {
