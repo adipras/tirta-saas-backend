@@ -27,6 +27,7 @@ func main() {
 	routes.CustomerRoutes(r)
 	routes.WaterRateRoutes(r)
 	routes.WaterUsageRoutes(r)
+	routes.PaymentRoutes(r)
 
 	r.Run()
 }

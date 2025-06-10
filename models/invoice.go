@@ -15,6 +15,7 @@ type Invoice struct {
 	PricePerM3  float64   `json:"price_per_m3"`
 	TotalAmount float64   `json:"total_amount"`
 	IsPaid      bool      `gorm:"default:false" json:"is_paid"`
+	TotalPaid   float64   `gorm:"default:0" json:"total_paid"`
 	TenantID    uuid.UUID `gorm:"type:char(36);index" json:"tenant_id"`
 	CreatedAt   int64     `gorm:"autoCreateTime" json:"created_at"`
 }
