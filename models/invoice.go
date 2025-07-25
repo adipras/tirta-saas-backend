@@ -2,11 +2,11 @@ package models
 
 import (
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 type Invoice struct {
-	ID          uuid.UUID `gorm:"type:char(36);primaryKey" json:"id"`
+	BaseModel
+
 	CustomerID  uuid.UUID `gorm:"type:char(36);not null" json:"customer_id"`
 	Customer    Customer  `gorm:"foreignKey:CustomerID" json:"customer"`
 	UsageMonth  string    `gorm:"type:varchar(7);index" json:"usage_month"`
@@ -16,11 +16,6 @@ type Invoice struct {
 	TotalAmount float64   `json:"total_amount"`
 	IsPaid      bool      `gorm:"default:false" json:"is_paid"`
 	TotalPaid   float64   `gorm:"default:0" json:"total_paid"`
+	Type        string    `gorm:"type:enum('registration','monthly');not null" json:"type"`
 	TenantID    uuid.UUID `gorm:"type:char(36);index" json:"tenant_id"`
-	CreatedAt   int64     `gorm:"autoCreateTime" json:"created_at"`
-}
-
-func (i *Invoice) BeforeCreate(tx *gorm.DB) (err error) {
-	i.ID = uuid.New()
-	return
 }

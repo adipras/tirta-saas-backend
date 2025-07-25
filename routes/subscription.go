@@ -11,7 +11,7 @@ func SubscriptionRoutes(r *gin.Engine) {
 	group.Use(middleware.JWTAuthMiddleware(), middleware.AdminOnly())
 
 	group.POST("/", controllers.CreateSubscriptionType)
-	group.GET("/", controllers.GetAllSubscriptionTypes)
-	group.PUT("/:id", controllers.UpdateSubscriptionType)
-	group.DELETE("/:id", controllers.DeleteSubscriptionType)
+	// group.GET("/", controllers.GetAllSubscriptionTypes)
+	// group.PUT("/:id", controllers.UpdateSubscriptionType)
+	// group.DELETE("/:id", controllers.DeleteSubscriptionType)
 }

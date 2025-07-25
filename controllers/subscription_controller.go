@@ -5,74 +5,48 @@ import (
 
 	"github.com/adipras/tirta-saas-backend/config"
 	"github.com/adipras/tirta-saas-backend/models"
-
+	"github.com/adipras/tirta-saas-backend/requests"
+	"github.com/adipras/tirta-saas-backend/responses"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 func CreateSubscriptionType(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
-
-	var input models.SubscriptionType
-	if err := c.ShouldBindJSON(&input); err != nil {
+	var req requests.CreateSubscriptionTypeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	input.TenantID = tenantID
-
-	if err := config.DB.Create(&input).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat abonemen"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, input)
-}
-
-func GetAllSubscriptionTypes(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
-	var data []models.SubscriptionType
 
-	if err := config.DB.Where("tenant_id = ?", tenantID).Find(&data).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data"})
+	sub := models.SubscriptionType{
+		Name:            req.Name,
+		Description:     req.Description,
+		RegistrationFee: req.RegistrationFee,
+		MonthlyFee:      req.MonthlyFee,
+		MaintenanceFee:  req.MaintenanceFee,
+		LateFeePerDay:   req.LateFeePerDay,
+		MaxLateFee:      req.MaxLateFee,
+		TenantID:        tenantID,
+	}
+
+	if err := config.DB.Create(&sub).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan SubscriptionType"})
 		return
 	}
 
-	c.JSON(http.StatusOK, data)
-}
-
-func UpdateSubscriptionType(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
-	id := c.Param("id")
-
-	var data models.SubscriptionType
-	if err := config.DB.Where("id = ? AND tenant_id = ?", id, tenantID).First(&data).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Data tidak ditemukan"})
-		return
+	res := responses.SubscriptionTypeResponse{
+		ID:              sub.ID,
+		Name:            sub.Name,
+		Description:     sub.Description,
+		RegistrationFee: sub.RegistrationFee,
+		MonthlyFee:      sub.MonthlyFee,
+		MaintenanceFee:  sub.MaintenanceFee,
+		LateFeePerDay:   sub.LateFeePerDay,
+		MaxLateFee:      sub.MaxLateFee,
+		CreatedAt:       sub.CreatedAt,
 	}
 
-	var input models.SubscriptionType
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	data.Name = input.Name
-	data.Description = input.Description
-
-	config.DB.Save(&data)
-
-	c.JSON(http.StatusOK, data)
-}
-
-func DeleteSubscriptionType(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
-	id := c.Param("id")
-
-	if err := config.DB.Where("id = ? AND tenant_id = ?", id, tenantID).Delete(&models.SubscriptionType{}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus data"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Berhasil dihapus"})
+	c.JSON(http.StatusCreated, res)
 }

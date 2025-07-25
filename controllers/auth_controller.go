@@ -28,8 +28,7 @@ func Register(c *gin.Context) {
 	hashedPassword, _ := utils.HashPassword(input.AdminPassword)
 
 	tenant := models.Tenant{
-		Name:        input.TenantName,
-		VillageCode: input.VillageCode,
+		Name: input.TenantName,
 	}
 
 	user := models.User{

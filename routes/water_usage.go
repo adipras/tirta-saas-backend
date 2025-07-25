@@ -13,4 +13,7 @@ func WaterUsageRoutes(r *gin.Engine) {
 
 	group.POST("/", controllers.CreateWaterUsage)
 	group.GET("/", controllers.GetWaterUsages)
+	group.GET("/:id", controllers.GetWaterUsageByID)
+	group.PUT("/:id", controllers.UpdateWaterUsage)
+	group.DELETE("/:id", controllers.DeleteWaterUsage)
 }
