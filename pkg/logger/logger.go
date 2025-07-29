@@ -72,6 +72,14 @@ func init() {
 	defaultLogger = New()
 }
 
+// Init initializes the logger with a specific level (optional - for explicit initialization)
+func Init(level string) {
+	if level != "" {
+		os.Setenv("LOG_LEVEL", level)
+	}
+	defaultLogger = New()
+}
+
 func New() *Logger {
 	level := getLogLevelFromEnv()
 	

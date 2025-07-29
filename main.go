@@ -24,6 +24,12 @@ func main() {
 	config.ConnectDB()
 	config.Migrate()
 
+	// Get port configuration
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // default
+	}
+
 	// Initialize logger
 	logger.Init("INFO")
 	logger.Info("🚀 Tirta-SaaS Backend starting up", map[string]interface{}{
