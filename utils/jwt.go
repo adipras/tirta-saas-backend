@@ -23,3 +23,19 @@ func GenerateJWT(userID, tenantID uuid.UUID, role string) (string, error) {
 
 	return tokenString, nil
 }
+
+func GenerateCustomerJWT(customerID, tenantID uuid.UUID) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"customer_id": customerID.String(),
+		"tenant_id":   tenantID.String(),
+		"role":        "customer",
+		"exp":         time.Now().Add(time.Hour * 24).Unix(),
+	})
+
+	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}

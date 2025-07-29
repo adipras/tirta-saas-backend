@@ -8,7 +8,7 @@ type Invoice struct {
 	BaseModel
 
 	CustomerID  uuid.UUID `gorm:"type:char(36);not null" json:"customer_id"`
-	Customer    Customer  `gorm:"foreignKey:CustomerID" json:"customer"`
+	Customer    Customer  `gorm:"foreignKey:CustomerID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"customer"`
 	UsageMonth  string    `gorm:"type:varchar(7);index" json:"usage_month"`
 	UsageM3     float64   `json:"usage_m3"`
 	Abonemen    float64   `json:"abonemen"`

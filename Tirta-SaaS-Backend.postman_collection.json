@@ -1,0 +1,1365 @@
+{
+  "info": {
+    "_postman_id": "tirta-saas-backend-collection",
+    "name": "Tirta-SaaS Backend API",
+    "description": "Complete API collection for Tirta-SaaS water billing system. This collection covers all endpoints from tenant registration to payment processing with automated variable management.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentication & Setup",
+      "item": [
+        {
+          "name": "1.1 Register New Tenant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has tenant_id\", function () {",
+                  "    pm.expect(response).to.have.property('tenant_id');",
+                  "    pm.environment.set(\"tenant_id\", response.tenant_id);",
+                  "    console.log(\"Tenant ID saved:\", response.tenant_id);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has admin_user_id\", function () {",
+                  "    pm.expect(response).to.have.property('admin_user_id');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Set unique tenant name if needed",
+                  "const timestamp = new Date().getTime();",
+                  "pm.environment.set(\"unique_suffix\", timestamp);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_name\": \"{{tenant_name}}\",\n  \"village_code\": \"JKT001\",\n  \"admin_name\": \"Admin Jakarta\",\n  \"admin_email\": \"{{admin_email}}\",\n  \"admin_password\": \"{{admin_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "1.2 Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has token\", function () {",
+                  "    pm.expect(response).to.have.property('token');",
+                  "    pm.environment.set(\"admin_token\", response.token);",
+                  "    console.log(\"Admin token saved\");",
+                  "});",
+                  "",
+                  "pm.test(\"User role is admin\", function () {",
+                  "    pm.expect(response.user.role).to.eql('admin');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Master Data Setup",
+      "item": [
+        {
+          "name": "2.1 Create Subscription Type",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has subscription type\", function () {",
+                  "    pm.expect(response).to.have.property('id');",
+                  "    pm.expect(response).to.have.property('name');",
+                  "    pm.environment.set(\"subscription_type_id\", response.id);",
+                  "    console.log(\"Subscription Type ID saved:\", response.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rumah Tangga\",\n  \"description\": \"Paket untuk rumah tangga dengan konsumsi normal\",\n  \"registration_fee\": 250000,\n  \"monthly_fee\": 50000,\n  \"maintenance_fee\": 25000,\n  \"late_fee_per_day\": 5000,\n  \"max_late_fee\": 100000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/subscription-types",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subscription-types"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2.2 List Subscription Types",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has subscription types array\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.subscription_types).to.be.an('array');",
+                  "    pm.expect(response.subscription_types.length).to.be.above(0);",
+                  "    pm.expect(response).to.have.property('total');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/subscription-types?page=1&per_page=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "subscription-types"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2.3 Create Water Rate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Response has water rate\", function () {",
+                  "    pm.expect(response).to.have.property('id');",
+                  "    pm.expect(response).to.have.property('amount');",
+                  "    pm.environment.set(\"water_rate_id\", response.id);",
+                  "    console.log(\"Water Rate ID saved:\", response.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Set effective date to today",
+                  "const today = new Date().toISOString().split('T')[0];",
+                  "pm.environment.set(\"effective_date\", today);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subscription_id\": \"{{subscription_type_id}}\",\n  \"amount\": 8500,\n  \"effective_date\": \"{{effective_date}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/water-rates",
+              "host": ["{{base_url}}"],
+              "path": ["api", "water-rates"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Customer Management",
+      "item": [
+        {
+          "name": "3.1 Register Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Customer created successfully\", function () {",
+                  "    pm.expect(response).to.have.property('id');",
+                  "    pm.expect(response).to.have.property('meter_number');",
+                  "    pm.expect(response).to.have.property('name');",
+                  "    pm.environment.set(\"customer_id\", response.id);",
+                  "    console.log(\"Customer ID saved:\", response.id);",
+                  "});",
+                  "",
+                  "pm.test(\"Customer is initially inactive\", function () {",
+                  "    pm.expect(response.is_active).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meter_number\": \"MTR-JKT-2024-001\",\n  \"name\": \"John Doe\",\n  \"email\": \"{{customer_email}}\",\n  \"password\": \"{{customer_password}}\",\n  \"address\": \"Jl. Sudirman No. 123, Jakarta Pusat\",\n  \"phone\": \"081234567890\",\n  \"subscription_id\": \"{{subscription_type_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/customers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "customers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3.2 List Customers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has customers array\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.customers).to.be.an('array');",
+                  "    pm.expect(response.customers.length).to.be.above(0);",
+                  "});",
+                  "",
+                  "pm.test(\"Pagination info present\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('total');",
+                  "    pm.expect(response).to.have.property('page');",
+                  "    pm.expect(response).to.have.property('per_page');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/customers?page=1&per_page=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "customers"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 Get Customer Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has customer details\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('id');",
+                  "    pm.expect(response).to.have.property('meter_number');",
+                  "    pm.expect(response.id).to.eql(pm.environment.get('customer_id'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/customers/{{customer_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "customers", "{{customer_id}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Invoice Management",
+      "item": [
+        {
+          "name": "4.1 Get Registration Invoice",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Found registration invoice\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.invoices).to.be.an('array');",
+                  "    pm.expect(response.invoices.length).to.be.above(0);",
+                  "    ",
+                  "    const registrationInvoice = response.invoices.find(inv => inv.type === 'registration');",
+                  "    pm.expect(registrationInvoice).to.not.be.undefined;",
+                  "    ",
+                  "    if (registrationInvoice) {",
+                  "        pm.environment.set(\"registration_invoice_id\", registrationInvoice.id);",
+                  "        console.log(\"Registration Invoice ID:\", registrationInvoice.id);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/invoices?customer_id={{customer_id}}&type=registration",
+              "host": ["{{base_url}}"],
+              "path": ["api", "invoices"],
+              "query": [
+                {
+                  "key": "customer_id",
+                  "value": "{{customer_id}}"
+                },
+                {
+                  "key": "type",
+                  "value": "registration"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4.2 Get Invoice Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Invoice details correct\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('invoice');",
+                  "    pm.expect(response.invoice.type).to.eql('registration');",
+                  "    pm.expect(response.invoice.status).to.eql('unpaid');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/invoices/{{invoice_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "invoices", "{{invoice_id}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Payment Processing",
+      "item": [
+        {
+          "name": "5.1 Process Registration Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Payment processed successfully\", function () {",
+                  "    pm.expect(response).to.have.property('payment');",
+                  "    pm.environment.set(\"payment_id\", response.payment.id);",
+                  "    console.log(\"Payment ID saved:\", response.payment.id);",
+                  "});",
+                  "",
+                  "pm.test(\"Customer activated\", function () {",
+                  "    pm.expect(response.customer_activated).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoice_id\": \"{{invoice_id}}\",\n  \"amount\": 250000,\n  \"payment_method\": \"bank_transfer\",\n  \"notes\": \"Payment for customer registration via BCA transfer\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "5.2 List Payments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Payments list returned\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.payments).to.be.an('array');",
+                  "    pm.expect(response.payments.length).to.be.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/payments?page=1&per_page=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Customer Portal",
+      "item": [
+        {
+          "name": "6.1 Customer Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Customer token received\", function () {",
+                  "    pm.expect(response).to.have.property('token');",
+                  "    pm.environment.set(\"customer_token\", response.token);",
+                  "    console.log(\"Customer token saved\");",
+                  "});",
+                  "",
+                  "pm.test(\"Customer is active\", function () {",
+                  "    pm.expect(response.customer.is_active).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customer_email}}\",\n  \"password\": \"{{customer_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/customer/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "customer", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6.2 View Customer Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Profile data returned\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('customer');",
+                  "    pm.expect(response.customer.email).to.eql(pm.environment.get('customer_email'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/customer/profile",
+              "host": ["{{base_url}}"],
+              "path": ["customer", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6.3 Customer Change Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Password changed successfully\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.message).to.include('successfully');",
+                  "});",
+                  "",
+                  "// Update password in environment for future tests",
+                  "pm.environment.set(\"customer_password\", \"NewSecurePass456!\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"{{customer_password}}\",\n  \"new_password\": \"NewSecurePass456!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/customer/change-password",
+              "host": ["{{base_url}}"],
+              "path": ["customer", "change-password"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Water Usage & Billing",
+      "item": [
+        {
+          "name": "7.1 Record Water Usage",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Water usage recorded\", function () {",
+                  "    pm.expect(response).to.have.property('id');",
+                  "    pm.expect(response).to.have.property('usage_m3');",
+                  "    pm.environment.set(\"usage_id\", response.id);",
+                  "    console.log(\"Water usage ID saved:\", response.id);",
+                  "});",
+                  "",
+                  "pm.test(\"Usage calculated correctly\", function () {",
+                  "    pm.expect(response.usage_m3).to.eql(15);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Set current month for usage",
+                  "const now = new Date();",
+                  "const year = now.getFullYear();",
+                  "const month = String(now.getMonth() + 1).padStart(2, '0');",
+                  "pm.environment.set(\"usage_month\", `${year}-${month}`);",
+                  "pm.environment.set(\"reading_date\", now.toISOString().split('T')[0]);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"usage_month\": \"{{usage_month}}\",\n  \"meter_end\": 15\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/water-usage",
+              "host": ["{{base_url}}"],
+              "path": ["api", "water-usage"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7.2 Generate Monthly Invoices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Invoices generated\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.invoices_created).to.be.above(0);",
+                  "    console.log(`Generated ${response.invoices_created} invoices for ${response.usage_month}`);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usage_month\": \"{{usage_month}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/invoices/generate-monthly",
+              "host": ["{{base_url}}"],
+              "path": ["api", "invoices", "generate-monthly"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7.3 Customer View Invoices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Customer invoices returned\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.invoices).to.be.an('array');",
+                  "    pm.expect(response.invoices.length).to.be.above(0);",
+                  "    ",
+                  "    // Find monthly invoice",
+                  "    const monthlyInvoice = response.invoices.find(inv => inv.type === 'monthly' && inv.status === 'unpaid');",
+                  "    if (monthlyInvoice) {",
+                  "        pm.environment.set(\"monthly_invoice_id\", monthlyInvoice.id);",
+                  "        console.log(\"Monthly Invoice ID:\", monthlyInvoice.id);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/customer/invoices",
+              "host": ["{{base_url}}"],
+              "path": ["customer", "invoices"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7.4 Customer Process Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Payment processed\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.message).to.include('successfully');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Calculate total amount (usage + monthly fee + maintenance)",
+                  "// 15 m3 * 8500 + 50000 + 25000 = 202500",
+                  "pm.environment.set(\"payment_amount\", 202500);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customer_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoice_id\": \"{{monthly_invoice_id}}\",\n  \"amount\": {{payment_amount}},\n  \"payment_method\": \"bank_transfer\",\n  \"notes\": \"Monthly payment via mobile banking\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/customer/payments",
+              "host": ["{{base_url}}"],
+              "path": ["customer", "payments"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. System Health & Monitoring",
+      "item": [
+        {
+          "name": "8.1 Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"System is healthy\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.status).to.eql('healthy');",
+                  "    pm.expect(response.checks).to.be.an('object');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8.2 Readiness Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"System is ready\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.status).to.eql('ready');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ready",
+              "host": ["{{base_url}}"],
+              "path": ["ready"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8.3 System Metrics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Metrics returned\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('memory');",
+                  "    pm.expect(response).to.have.property('runtime');",
+                  "    pm.expect(response).to.have.property('database');",
+                  "    pm.expect(response).to.have.property('application');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["metrics"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "9. Error Scenarios",
+      "item": [
+        {
+          "name": "9.1 Invalid Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"Error message returned\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('error');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"WrongPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.2 Missing Authorization",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"Authorization required error\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.error).to.include('Authorization');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/customers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "customers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.3 Invalid Data Format",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Validation error returned\", function () {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('error');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meter_number\": \"MTR-TEST-001\",\n  \"name\": \"Test Customer\",\n  \"email\": \"invalid-email-format\",\n  \"password\": \"short\",\n  \"subscription_id\": \"{{subscription_type_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/customers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "customers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9.4 Rate Limiting Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// This test is expected to fail after multiple rapid executions",
+                  "if (pm.response.code === 429) {",
+                  "    pm.test(\"Rate limit enforced\", function () {",
+                  "        pm.response.to.have.status(429);",
+                  "    });",
+                  "} else {",
+                  "    pm.test(\"Request succeeded (run multiple times to trigger rate limit)\", function () {",
+                  "        pm.response.to.have.status(200);",
+                  "        console.log(\"Run this request 20+ times rapidly to trigger rate limiting\");",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/customers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "customers"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script",
+          "// This runs before every request in the collection"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test script",
+          "// Log response time for all requests",
+          "console.log(`Response time: ${pm.response.responseTime}ms`);"
+        ]
+      }
+    }
+  ]
+}

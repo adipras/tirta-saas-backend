@@ -11,7 +11,7 @@ import (
 type Payment struct {
 	TenantID  uuid.UUID `gorm:"type:char(36);not null;index" json:"tenant_id"`
 	InvoiceID uuid.UUID `gorm:"type:char(36);not null;index" json:"invoice_id"`
-	Invoice   Invoice   `gorm:"foreignKey:InvoiceID" json:"invoice"`
+	Invoice   Invoice   `gorm:"foreignKey:InvoiceID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"invoice"`
 	Amount    float64   `gorm:"not null" json:"amount"`
 	Penalty   float64   `gorm:"default:0" json:"penalty"`
 	PaidAt    time.Time `gorm:"not null" json:"paid_at"`

@@ -25,7 +25,9 @@ func ConnectDB() {
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, pass, host, port, name)
 
-	database, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	database, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true,
+	})
 	if err != nil {
 		log.Fatalf("❌ Gagal konek ke database: %v", err)
 	}
@@ -37,15 +39,19 @@ func ConnectDB() {
 func Migrate() {
 	log.Println("🚀 Memulai proses migrasi database...")
 
+	// Migration order is important due to foreign key constraints
+	// 1. Base entities first (no dependencies)
+	// 2. Entities with foreign keys last
 	err := DB.AutoMigrate(
-		&models.Tenant{},
-		&models.User{},
-		&models.SubscriptionType{},
-		&models.Customer{},
-		&models.WaterRate{},
-		&models.WaterUsage{},
-		&models.Invoice{},
-		&models.Payment{},
+		&models.Tenant{},            // No dependencies
+		&models.User{},              // References Tenant
+		&models.SubscriptionType{},  // References Tenant
+		&models.Customer{},          // References Tenant + SubscriptionType
+		&models.WaterRate{},         // References Tenant + SubscriptionType
+		&models.WaterUsage{},        // References Tenant + Customer
+		&models.Invoice{},           // References Tenant + Customer
+		&models.Payment{},           // References Tenant + Invoice (must be after Invoice)
+		&models.AuditLog{},          // References Tenant (no other FK constraints)
 	)
 
 	if err != nil {
@@ -53,4 +59,11 @@ func Migrate() {
 	}
 
 	log.Println("✅ Migrasi database selesai.")
+	
+	// Apply database optimizations after migration
+	if err := OptimizeDatabase(DB); err != nil {
+		log.Printf("⚠️ Database optimization failed: %v", err)
+	} else {
+		log.Println("✅ Database optimizations applied")
+	}
 }

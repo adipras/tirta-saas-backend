@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/adipras/tirta-saas-backend/utils"
 )
 
 func CreateCustomer(c *gin.Context) {
@@ -33,14 +34,30 @@ func CreateCustomer(c *gin.Context) {
 		return
 	}
 
+	// Hash password
+	hashedPassword, err := utils.HashPassword(req.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	// Begin transaction for customer creation and invoice generation
+	tx := config.DB.Begin()
+	
 	// Buat Customer
 	customer := models.Customer{
+		MeterNumber:    req.MeterNumber,
 		Name:           req.Name,
+		Email:          req.Email,
+		Password:       hashedPassword,
+		Phone:          req.Phone,
+		Address:        req.Address,
 		SubscriptionID: req.SubscriptionID,
 		IsActive:       false,
 		TenantID:       tenantID,
 	}
-	if err := config.DB.Create(&customer).Error; err != nil {
+	if err := tx.Create(&customer).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create customer"})
 		return
 	}
@@ -58,15 +75,24 @@ func CreateCustomer(c *gin.Context) {
 		Type:        "registration",
 		TenantID:    tenantID,
 	}
-	if err := config.DB.Create(&invoice).Error; err != nil {
+	if err := tx.Create(&invoice).Error; err != nil {
+		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create registration invoice"})
+		return
+	}
+	
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete customer registration"})
 		return
 	}
 
 	// Respon
 	response := responses.CustomerResponse{
 		ID:             customer.ID,
+		MeterNumber:    customer.MeterNumber,
 		Name:           customer.Name,
+		Email:          customer.Email,
 		Address:        customer.Address,
 		Phone:          customer.Phone,
 		SubscriptionID: customer.SubscriptionID,
@@ -86,7 +112,51 @@ func GetCustomers(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, customers)
+	// Convert to response format
+	customerResponses := make([]responses.CustomerResponse, len(customers))
+	for i, customer := range customers {
+		customerResponses[i] = responses.CustomerResponse{
+			ID:             customer.ID,
+			MeterNumber:    customer.MeterNumber,
+			Name:           customer.Name,
+			Email:          customer.Email,
+			Address:        customer.Address,
+			Phone:          customer.Phone,
+			SubscriptionID: customer.SubscriptionID,
+			IsActive:       customer.IsActive,
+		}
+	}
+
+	response := responses.CustomerListResponse{
+		Customers: customerResponses,
+		Total:     len(customerResponses),
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+func GetCustomer(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	id := c.Param("id")
+	
+	var customer models.Customer
+	if err := config.DB.Preload("Subscription").
+		Where("id = ? AND tenant_id = ?", id, tenantID).
+		First(&customer).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Customer not found"})
+		return
+	}
+	
+	response := responses.CustomerResponse{
+		ID:             customer.ID,
+		MeterNumber:    customer.MeterNumber,
+		Name:           customer.Name,
+		Email:          customer.Email,
+		Address:        customer.Address,
+		Phone:          customer.Phone,
+		SubscriptionID: customer.SubscriptionID,
+		IsActive:       customer.IsActive,
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func UpdateCustomer(c *gin.Context) {
@@ -115,7 +185,17 @@ func UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, customer)
+	response := responses.CustomerResponse{
+		ID:             customer.ID,
+		MeterNumber:    customer.MeterNumber,
+		Name:           customer.Name,
+		Email:          customer.Email,
+		Address:        customer.Address,
+		Phone:          customer.Phone,
+		SubscriptionID: customer.SubscriptionID,
+		IsActive:       customer.IsActive,
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func DeleteCustomer(c *gin.Context) {

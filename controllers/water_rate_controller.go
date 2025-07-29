@@ -66,3 +66,82 @@ func GetWaterRates(c *gin.Context) {
 
 	c.JSON(http.StatusOK, rates)
 }
+
+func UpdateWaterRate(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	id := c.Param("id")
+
+	rateID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid water rate ID"})
+		return
+	}
+
+	var rate models.WaterRate
+	if err := config.DB.Where("id = ? AND tenant_id = ?", rateID, tenantID).
+		First(&rate).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Tarif air tidak ditemukan"})
+		return
+	}
+
+	var input struct {
+		Amount        float64 `json:"amount"`
+		EffectiveDate string  `json:"effective_date"` // YYYY-MM-DD
+		Active        bool    `json:"active"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	date, err := time.Parse("2006-01-02", input.EffectiveDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tanggal tidak valid"})
+		return
+	}
+
+	// If activating this rate, deactivate others for the same subscription
+	if input.Active && !rate.Active {
+		config.DB.Model(&models.WaterRate{}).
+			Where("subscription_id = ? AND tenant_id = ? AND id != ?", 
+				rate.SubscriptionID, tenantID, rateID).
+			Update("active", false)
+	}
+
+	rate.Amount = input.Amount
+	rate.EffectiveDate = date
+	rate.Active = input.Active
+
+	if err := config.DB.Save(&rate).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui tarif"})
+		return
+	}
+
+	c.JSON(http.StatusOK, rate)
+}
+
+func DeleteWaterRate(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	id := c.Param("id")
+
+	rateID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid water rate ID"})
+		return
+	}
+
+	var rate models.WaterRate
+	if err := config.DB.Where("id = ? AND tenant_id = ?", rateID, tenantID).
+		First(&rate).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Tarif air tidak ditemukan"})
+		return
+	}
+
+	if err := config.DB.Delete(&rate).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus tarif"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Tarif air berhasil dihapus"})
+}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/adipras/tirta-saas-backend/config"
 	"github.com/adipras/tirta-saas-backend/models"
+	"github.com/adipras/tirta-saas-backend/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -51,44 +52,43 @@ func GenerateMonthlyInvoice(c *gin.Context) {
 
 		// Ambil data pelanggan & SubscriptionType
 		var customer models.Customer
-		if err := config.DB.First(&customer, "id = ?", usage.CustomerID).Error; err != nil {
+		if err := config.DB.Where("id = ? AND tenant_id = ?", usage.CustomerID, tenantID).First(&customer).Error; err != nil {
 			continue
 		}
 
 		var subType models.SubscriptionType
-		if err := config.DB.First(&subType, "id = ?", customer.SubscriptionID).Error; err != nil {
+		if err := config.DB.Where("id = ? AND tenant_id = ?", customer.SubscriptionID, tenantID).First(&subType).Error; err != nil {
 			continue
 		}
 
-		// // Hitung denda dari tagihan bulan sebelumnya jika ada dan belum dibayar
-		// var penalty float64 = 0
-		// prevMonth, _ := utils.PreviousMonth(usage.UsageMonth)
-		// var prevInvoice models.Invoice
-		// err = config.DB.Where("customer_id = ? AND usage_month = ? AND type = ?", usage.CustomerID, prevMonth, "monthly").
-		// 	First(&prevInvoice).Error
+		// Business rule validations
+		if usage.UsageM3 < 0 {
+			continue // Skip invalid usage records
+		}
 
-		// if err == nil && !prevInvoice.IsPaid {
-		// 	// Hitung keterlambatan
-		// 	// Misal batas pembayaran adalah 10 hari setelah akhir bulan penggunaan
-		// 	dueDate, _ := utils.DueDateFromUsageMonth(prevInvoice.UsageMonth, 10) // 2025-05 → 2025-06-10
-		// 	today := time.Now()
-		// 	if today.After(dueDate) {
-		// 		daysLate := int(today.Sub(dueDate).Hours() / 24)
-		// 		penalty = float64(daysLate) * subType.LateFeePerDay
-		// 		if penalty > subType.MaxLateFee {
-		// 			penalty = subType.MaxLateFee
-		// 		}
-		// 	}
-		// }
+		if usage.AmountCalculated < 0 {
+			continue // Skip invalid calculated amounts
+		}
 
 		total := usage.AmountCalculated + subType.MonthlyFee + subType.MaintenanceFee
+
+		// Validate calculated total is reasonable
+		if total <= 0 || total > 999999 {
+			continue // Skip invoices with invalid totals
+		}
+
+		// Calculate price per m3 safely
+		pricePerM3 := 0.0
+		if usage.UsageM3 > 0 {
+			pricePerM3 = usage.AmountCalculated / usage.UsageM3
+		}
 
 		invoice := models.Invoice{
 			CustomerID:  usage.CustomerID,
 			UsageMonth:  usage.UsageMonth,
 			UsageM3:     usage.UsageM3,
 			Abonemen:    subType.MonthlyFee,
-			PricePerM3:  usage.AmountCalculated / usage.UsageM3,
+			PricePerM3:  pricePerM3,
 			TotalAmount: total,
 			TotalPaid:   0,
 			IsPaid:      false,
@@ -119,46 +119,136 @@ func GetInvoices(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, invoices)
+	// Convert to response format
+	invoiceResponses := make([]responses.InvoiceResponse, len(invoices))
+	for i, invoice := range invoices {
+		invoiceResponses[i] = responses.InvoiceResponse{
+			ID:          invoice.ID,
+			CustomerID:  invoice.CustomerID,
+			UsageMonth:  invoice.UsageMonth,
+			UsageM3:     invoice.UsageM3,
+			Abonemen:    invoice.Abonemen,
+			PricePerM3:  invoice.PricePerM3,
+			TotalAmount: invoice.TotalAmount,
+			TotalPaid:   invoice.TotalPaid,
+			IsPaid:      invoice.IsPaid,
+			Type:        invoice.Type,
+			CreatedAt:   invoice.CreatedAt,
+		}
+	}
+
+	response := responses.InvoiceListResponse{
+		Invoices: invoiceResponses,
+		Total:    len(invoiceResponses),
+	}
+	c.JSON(http.StatusOK, response)
 }
 
-// func UpdateInvoice(c *gin.Context) {
-// 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
-// 	id := c.Param("id")
+func GetInvoice(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	id := c.Param("id")
 
-// 	var invoice models.Invoice
-// 	if err := config.DB.Where("id = ? AND tenant_id = ?", id, tenantID).
-// 		First(&invoice).Error; err != nil {
-// 		c.JSON(http.StatusNotFound, gin.H{"error": "Invoice tidak ditemukan"})
-// 		return
-// 	}
+	invoiceID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid invoice ID"})
+		return
+	}
 
-// 	var input dto.UpdateInvoiceInput
-// 	if err := c.ShouldBindJSON(&input); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-// 		return
-// 	}
+	var invoice models.Invoice
+	if err := config.DB.Preload("Customer").
+		Where("id = ? AND tenant_id = ?", invoiceID, tenantID).
+		First(&invoice).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Invoice tidak ditemukan"})
+		return
+	}
 
-// 	invoice.UsageM3 = input.UsageM3
-// 	invoice.Abonemen = input.Abonemen
-// 	invoice.PricePerM3 = input.PricePerM3
-// 	invoice.TotalAmount = input.TotalAmount
-// 	invoice.IsPaid = input.IsPaid
-// 	invoice.TotalPaid = input.TotalPaid
+	response := responses.InvoiceResponse{
+		ID:          invoice.ID,
+		CustomerID:  invoice.CustomerID,
+		UsageMonth:  invoice.UsageMonth,
+		UsageM3:     invoice.UsageM3,
+		Abonemen:    invoice.Abonemen,
+		PricePerM3:  invoice.PricePerM3,
+		TotalAmount: invoice.TotalAmount,
+		TotalPaid:   invoice.TotalPaid,
+		IsPaid:      invoice.IsPaid,
+		Type:        invoice.Type,
+		CreatedAt:   invoice.CreatedAt,
+	}
+	c.JSON(http.StatusOK, response)
+}
 
-// 	if err := config.DB.Save(&invoice).Error; err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui invoice"})
-// 		return
-// 	}
+func UpdateInvoice(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	id := c.Param("id")
 
-// 	c.JSON(http.StatusOK, invoice)
-// }
+	invoiceID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid invoice ID"})
+		return
+	}
+
+	var invoice models.Invoice
+	if err := config.DB.Where("id = ? AND tenant_id = ?", invoiceID, tenantID).
+		First(&invoice).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Invoice tidak ditemukan"})
+		return
+	}
+
+	type UpdateInvoiceInput struct {
+		UsageM3     float64 `json:"usage_m3"`
+		Abonemen    float64 `json:"abonemen"`
+		PricePerM3  float64 `json:"price_per_m3"`
+		TotalAmount float64 `json:"total_amount"`
+		IsPaid      bool    `json:"is_paid"`
+		TotalPaid   float64 `json:"total_paid"`
+	}
+
+	var input UpdateInvoiceInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	invoice.UsageM3 = input.UsageM3
+	invoice.Abonemen = input.Abonemen
+	invoice.PricePerM3 = input.PricePerM3
+	invoice.TotalAmount = input.TotalAmount
+	invoice.IsPaid = input.IsPaid
+	invoice.TotalPaid = input.TotalPaid
+
+	if err := config.DB.Save(&invoice).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui invoice"})
+		return
+	}
+
+	response := responses.InvoiceResponse{
+		ID:          invoice.ID,
+		CustomerID:  invoice.CustomerID,
+		UsageMonth:  invoice.UsageMonth,
+		UsageM3:     invoice.UsageM3,
+		Abonemen:    invoice.Abonemen,
+		PricePerM3:  invoice.PricePerM3,
+		TotalAmount: invoice.TotalAmount,
+		TotalPaid:   invoice.TotalPaid,
+		IsPaid:      invoice.IsPaid,
+		Type:        invoice.Type,
+		CreatedAt:   invoice.CreatedAt,
+	}
+	c.JSON(http.StatusOK, response)
+}
 
 func DeleteInvoice(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	id := c.Param("id")
 
-	if err := config.DB.Where("id = ? AND tenant_id = ?", id, tenantID).
+	invoiceID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid invoice ID"})
+		return
+	}
+
+	if err := config.DB.Where("id = ? AND tenant_id = ?", invoiceID, tenantID).
 		Delete(&models.Invoice{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus invoice"})
 		return

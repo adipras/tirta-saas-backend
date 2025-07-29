@@ -6,7 +6,7 @@ import (
 
 type WaterUsage struct {
 	CustomerID       uuid.UUID `gorm:"type:char(36);not null;index" json:"customer_id"`
-	Customer         Customer  `gorm:"foreignKey:CustomerID" json:"customer"`
+	Customer         Customer  `gorm:"foreignKey:CustomerID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"customer"`
 	UsageMonth       string    `gorm:"type:varchar(7);not null;index" json:"usage_month"` // e.g. 2025-06
 	MeterStart       float64   `json:"meter_start"`
 	MeterEnd         float64   `json:"meter_end"`
@@ -15,4 +15,9 @@ type WaterUsage struct {
 	TenantID         uuid.UUID `gorm:"type:char(36);not null;index" json:"tenant_id"`
 
 	BaseModel
+}
+
+// TableName overrides the table name for GORM
+func (WaterUsage) TableName() string {
+	return "water_usages"
 }

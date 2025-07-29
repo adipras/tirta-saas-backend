@@ -7,8 +7,12 @@ import (
 )
 
 func InvoiceRoutes(r *gin.Engine) {
-	group := r.Group("/api/customers")
+	group := r.Group("/api/invoices")
 	group.Use(middleware.JWTAuthMiddleware(), middleware.AdminOnly())
 
-	r.POST("/invoices/generate-monthly", controllers.GenerateMonthlyInvoice)
+	group.POST("/generate-monthly", controllers.GenerateMonthlyInvoice)
+	group.GET("/", controllers.GetInvoices)
+	group.GET("/:id", controllers.GetInvoice)
+	group.PUT("/:id", controllers.UpdateInvoice)
+	group.DELETE("/:id", controllers.DeleteInvoice)
 }

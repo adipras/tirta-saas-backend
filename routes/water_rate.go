@@ -12,4 +12,6 @@ func WaterRateRoutes(r *gin.Engine) {
 
 	group.POST("/", controllers.CreateWaterRate)
 	group.GET("/", controllers.GetWaterRates)
+	group.PUT("/:id", controllers.UpdateWaterRate)
+	group.DELETE("/:id", controllers.DeleteWaterRate)
 }

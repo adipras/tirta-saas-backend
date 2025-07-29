@@ -7,6 +7,7 @@ import (
 	"github.com/adipras/tirta-saas-backend/config"
 	"github.com/adipras/tirta-saas-backend/models"
 	"github.com/adipras/tirta-saas-backend/requests"
+	"github.com/adipras/tirta-saas-backend/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -21,8 +22,14 @@ func CreateWaterUsage(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// Business rule validation: Check reasonable meter reading
+	if req.MeterEnd < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Meter end reading cannot be negative"})
+		return
+	}
+
+	if req.MeterEnd > 99999999 { // 8 digit max reasonable meter reading
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Meter reading exceeds maximum allowed value"})
 		return
 	}
 
@@ -50,7 +57,7 @@ func CreateWaterUsage(c *gin.Context) {
 
 	// Ambil data customer
 	var customer models.Customer
-	if err := config.DB.Where("id = ?", req.CustomerID).First(&customer).Error; err != nil {
+	if err := config.DB.Where("id = ? AND tenant_id = ?", req.CustomerID, tenantID).First(&customer).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Pelanggan tidak ditemukan"})
 		return
 	}
@@ -66,6 +73,18 @@ func CreateWaterUsage(c *gin.Context) {
 	}
 
 	UsageM3 := req.MeterEnd - meterStart
+
+	// Business rule validation: Check reasonable usage amount
+	if UsageM3 < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Calculated usage cannot be negative"})
+		return
+	}
+
+	if UsageM3 > 1000 { // Max 1000 m3 per month seems reasonable
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Usage amount exceeds reasonable limit (1000 m3/month)"})
+		return
+	}
+
 	usage := models.WaterUsage{
 		CustomerID:       req.CustomerID,
 		UsageMonth:       req.UsageMonth,
@@ -81,7 +100,17 @@ func CreateWaterUsage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, usage)
+	response := responses.WaterUsageResponse{
+		ID:               usage.ID,
+		CustomerID:       usage.CustomerID,
+		UsageMonth:       usage.UsageMonth,
+		MeterStart:       usage.MeterStart,
+		MeterEnd:         usage.MeterEnd,
+		UsageM3:          usage.UsageM3,
+		AmountCalculated: usage.AmountCalculated,
+		CreatedAt:        usage.CreatedAt,
+	}
+	c.JSON(http.StatusCreated, response)
 }
 
 func GetWaterUsages(c *gin.Context) {
@@ -96,7 +125,26 @@ func GetWaterUsages(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, records)
+	// Convert to response format
+	usageResponses := make([]responses.WaterUsageResponse, len(records))
+	for i, record := range records {
+		usageResponses[i] = responses.WaterUsageResponse{
+			ID:               record.ID,
+			CustomerID:       record.CustomerID,
+			UsageMonth:       record.UsageMonth,
+			MeterStart:       record.MeterStart,
+			MeterEnd:         record.MeterEnd,
+			UsageM3:          record.UsageM3,
+			AmountCalculated: record.AmountCalculated,
+			CreatedAt:        record.CreatedAt,
+		}
+	}
+
+	response := responses.WaterUsageListResponse{
+		UsageRecords: usageResponses,
+		Total:        len(usageResponses),
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func GetWaterUsageByID(c *gin.Context) {
@@ -111,7 +159,17 @@ func GetWaterUsageByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, usage)
+	response := responses.WaterUsageResponse{
+		ID:               usage.ID,
+		CustomerID:       usage.CustomerID,
+		UsageMonth:       usage.UsageMonth,
+		MeterStart:       usage.MeterStart,
+		MeterEnd:         usage.MeterEnd,
+		UsageM3:          usage.UsageM3,
+		AmountCalculated: usage.AmountCalculated,
+		CreatedAt:        usage.CreatedAt,
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func UpdateWaterUsage(c *gin.Context) {
@@ -133,6 +191,17 @@ func UpdateWaterUsage(c *gin.Context) {
 		return
 	}
 
+	// Business rule validations
+	if input.MeterEnd < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Meter end reading cannot be negative"})
+		return
+	}
+
+	if input.MeterEnd > 99999999 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Meter reading exceeds maximum allowed value"})
+		return
+	}
+
 	if input.MeterEnd < usage.MeterStart {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Meter akhir tidak boleh lebih kecil dari awal"})
 		return
@@ -140,7 +209,7 @@ func UpdateWaterUsage(c *gin.Context) {
 
 	// Ambil data customer
 	var customer models.Customer
-	if err := config.DB.Where("id = ?", usage.CustomerID).First(&customer).Error; err != nil {
+	if err := config.DB.Where("id = ? AND tenant_id = ?", usage.CustomerID, tenantID).First(&customer).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Pelanggan tidak ditemukan"})
 		return
 	}
@@ -157,6 +226,12 @@ func UpdateWaterUsage(c *gin.Context) {
 
 	UsageM3 := input.MeterEnd - usage.MeterStart
 
+	// Business rule validation: Check reasonable usage amount
+	if UsageM3 > 1000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Usage amount exceeds reasonable limit (1000 m3/month)"})
+		return
+	}
+
 	usage.MeterEnd = input.MeterEnd
 	usage.UsageM3 = UsageM3
 	usage.AmountCalculated = UsageM3 * rate.Amount
@@ -166,7 +241,17 @@ func UpdateWaterUsage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, usage)
+	response := responses.WaterUsageResponse{
+		ID:               usage.ID,
+		CustomerID:       usage.CustomerID,
+		UsageMonth:       usage.UsageMonth,
+		MeterStart:       usage.MeterStart,
+		MeterEnd:         usage.MeterEnd,
+		UsageM3:          usage.UsageM3,
+		AmountCalculated: usage.AmountCalculated,
+		CreatedAt:        usage.CreatedAt,
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func DeleteWaterUsage(c *gin.Context) {

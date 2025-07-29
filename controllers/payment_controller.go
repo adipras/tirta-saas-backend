@@ -35,6 +35,17 @@ func CreatePayment(c *gin.Context) {
 		return
 	}
 
+	// Business rule validations
+	if req.Amount <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount must be greater than zero"})
+		return
+	}
+
+	if req.Amount > 999999 { // Max payment amount validation
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount exceeds maximum allowed limit"})
+		return
+	}
+
 	if invoice.TotalPaid+req.Amount > invoice.TotalAmount {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": fmt.Sprintf("Pembayaran melebihi total tagihan. Sisa tagihan: %.2f", invoice.TotalAmount-invoice.TotalPaid),
@@ -107,4 +118,168 @@ func GetPaymentHistoryByCustomerID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, payments)
+}
+
+func GetAllPayments(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+
+	var payments []models.Payment
+	if err := config.DB.Preload("Invoice").
+		Where("tenant_id = ?", tenantID).
+		Order("created_at desc").
+		Find(&payments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data pembayaran"})
+		return
+	}
+
+	c.JSON(http.StatusOK, payments)
+}
+
+func GetPayment(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	id := c.Param("id")
+
+	paymentID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payment ID"})
+		return
+	}
+
+	var payment models.Payment
+	if err := config.DB.Preload("Invoice").
+		Where("id = ? AND tenant_id = ?", paymentID, tenantID).
+		First(&payment).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Pembayaran tidak ditemukan"})
+		return
+	}
+
+	c.JSON(http.StatusOK, payment)
+}
+
+func UpdatePayment(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	id := c.Param("id")
+
+	paymentID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payment ID"})
+		return
+	}
+
+	var payment models.Payment
+	if err := config.DB.Where("id = ? AND tenant_id = ?", paymentID, tenantID).
+		First(&payment).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Pembayaran tidak ditemukan"})
+		return
+	}
+
+	type UpdatePaymentInput struct {
+		Amount float64 `json:"amount" binding:"required,min=0"`
+	}
+
+	var input UpdatePaymentInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get the invoice to validate the update
+	var invoice models.Invoice
+	if err := config.DB.Where("id = ? AND tenant_id = ?", payment.InvoiceID, tenantID).First(&invoice).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data invoice"})
+		return
+	}
+
+	// Calculate total paid excluding current payment
+	var totalPaidExcludingCurrent float64
+	config.DB.Model(&models.Payment{}).
+		Where("invoice_id = ? AND id != ?", payment.InvoiceID, paymentID).
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalPaidExcludingCurrent)
+
+	// Business rule validations
+	if input.Amount <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount must be greater than zero"})
+		return
+	}
+
+	if input.Amount > 999999 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment amount exceeds maximum allowed limit"})
+		return
+	}
+
+	// Validate new amount
+	if totalPaidExcludingCurrent+input.Amount > invoice.TotalAmount {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("Pembayaran melebihi total tagihan. Maksimal: %.2f", invoice.TotalAmount-totalPaidExcludingCurrent),
+		})
+		return
+	}
+
+	// Update payment
+	payment.Amount = input.Amount
+	if err := config.DB.Save(&payment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui pembayaran"})
+		return
+	}
+
+	// Update invoice total paid
+	var newTotalPaid float64
+	config.DB.Model(&models.Payment{}).
+		Where("invoice_id = ?", payment.InvoiceID).
+		Select("SUM(amount)").Scan(&newTotalPaid)
+
+	invoice.TotalPaid = newTotalPaid
+	invoice.IsPaid = newTotalPaid >= invoice.TotalAmount
+	config.DB.Save(&invoice)
+
+	c.JSON(http.StatusOK, payment)
+}
+
+func DeletePayment(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	id := c.Param("id")
+
+	paymentID, err := uuid.Parse(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payment ID"})
+		return
+	}
+
+	var payment models.Payment
+	if err := config.DB.Where("id = ? AND tenant_id = ?", paymentID, tenantID).
+		First(&payment).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Pembayaran tidak ditemukan"})
+		return
+	}
+
+	// Store invoice ID before deleting payment
+	invoiceID := payment.InvoiceID
+
+	// Delete payment
+	if err := config.DB.Delete(&payment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus pembayaran"})
+		return
+	}
+
+	// Update invoice total paid
+	var invoice models.Invoice
+	if err := config.DB.Where("id = ? AND tenant_id = ?", invoiceID, tenantID).First(&invoice).Error; err == nil {
+		var newTotalPaid float64
+		config.DB.Model(&models.Payment{}).
+			Where("invoice_id = ?", invoiceID).
+			Select("COALESCE(SUM(amount), 0)").Scan(&newTotalPaid)
+
+		invoice.TotalPaid = newTotalPaid
+		invoice.IsPaid = newTotalPaid >= invoice.TotalAmount
+		config.DB.Save(&invoice)
+
+		// If this was a registration invoice and is no longer paid, deactivate customer
+		if invoice.Type == "registration" && !invoice.IsPaid {
+			config.DB.Model(&models.Customer{}).
+				Where("id = ?", invoice.CustomerID).
+				Update("is_active", false)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Pembayaran berhasil dihapus"})
 }
