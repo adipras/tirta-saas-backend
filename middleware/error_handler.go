@@ -58,7 +58,7 @@ func ValidationErrorHandlerMiddleware() gin.HandlerFunc {
 				handleValidationErrors(c, validationErrors)
 				return
 			}
-			
+
 			if businessError, ok := err.Err.(*BusinessValidationError); ok {
 				handleBusinessValidationError(c, businessError)
 				return
@@ -88,7 +88,7 @@ func RequestTimeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
 		// Add timeout to context
 		// Note: In a real implementation, you might want to use context.WithTimeout
 		// For this example, we'll just add the middleware structure
-		
+
 		c.Next()
 	}
 }
@@ -98,7 +98,7 @@ func isDatabaseError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	// Check for GORM errors
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return true
@@ -118,7 +118,7 @@ func isDatabaseError(err error) bool {
 	if errors.Is(err, gorm.ErrPrimaryKeyRequired) {
 		return true
 	}
-	
+
 	// Check for common database error patterns
 	errorStr := err.Error()
 	if contains(errorStr, "duplicate key") ||
@@ -129,7 +129,7 @@ func isDatabaseError(err error) bool {
 		contains(errorStr, "connection timeout") {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -138,7 +138,7 @@ func isAuthError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	errorStr := err.Error()
 	return contains(errorStr, "unauthorized") ||
 		contains(errorStr, "forbidden") ||
@@ -198,8 +198,8 @@ func handleValidationErrors(c *gin.Context, validationErrors validator.Validatio
 	}
 
 	logger.Warn("Validation error", map[string]interface{}{
-		"method":           c.Request.Method,
-		"path":             c.Request.URL.Path,
+		"method":            c.Request.Method,
+		"path":              c.Request.URL.Path,
 		"validation_errors": errors,
 	})
 
@@ -242,10 +242,10 @@ func handleAuthError(c *gin.Context, err error) {
 
 // Helper function to check if a string contains a substring (case-insensitive)
 func contains(str, substr string) bool {
-	return len(str) >= len(substr) && (str == substr || 
-		(len(str) > len(substr) && 
-			(str[:len(substr)] == substr || 
-				str[len(str)-len(substr):] == substr || 
+	return len(str) >= len(substr) && (str == substr ||
+		(len(str) > len(substr) &&
+			(str[:len(substr)] == substr ||
+				str[len(str)-len(substr):] == substr ||
 				findSubstring(str, substr))))
 }
 
@@ -281,7 +281,7 @@ func isRateLimitError(err error) bool {
 	return contains(errorStr, "rate limit") || contains(errorStr, "too many requests")
 }
 
-func handleRateLimitError(c *gin.Context, err error) {
+func handleRateLimitError(c *gin.Context, _ error) {
 	logger.Warn("Rate limit exceeded", map[string]interface{}{
 		"method": c.Request.Method,
 		"path":   c.Request.URL.Path,

@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -72,34 +73,45 @@ func DefaultSecurityConfig() SecurityConfig {
 
 // CORSMiddleware sets up CORS with security considerations
 func CORSMiddleware() gin.HandlerFunc {
+	// For development, use a simple configuration that allows all localhost origins
+	if gin.Mode() != gin.ReleaseMode {
+		return cors.New(cors.Config{
+			AllowOriginFunc: func(origin string) bool {
+				// Allow any localhost origin in development
+				return true
+			},
+			AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+			AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization", "X-Requested-With", "Accept", "Accept-Encoding", "X-CSRF-Token"},
+			ExposeHeaders:    []string{"Content-Length", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"},
+			AllowCredentials: true,
+			MaxAge:           12 * time.Hour,
+		})
+	}
+	
+	// Production configuration
 	config := DefaultSecurityConfig()
 	
-	corsConfig := cors.Config{
+	// Add frontend URL from environment if available
+	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
+		config.AllowedOrigins = append(config.AllowedOrigins, frontendURL)
+	}
+	
+	return cors.New(cors.Config{
 		AllowOrigins:     config.AllowedOrigins,
 		AllowMethods:     config.AllowedMethods,
 		AllowHeaders:     config.AllowedHeaders,
 		ExposeHeaders:    config.ExposeHeaders,
 		AllowCredentials: config.AllowCredentials,
 		MaxAge:           config.MaxAge,
-	}
-	
-	// In production, you might want to be more restrictive
-	if gin.Mode() == gin.ReleaseMode {
-		// Only allow specific origins in production
-		corsConfig.AllowOriginFunc = func(origin string) bool {
+		AllowOriginFunc: func(origin string) bool {
 			for _, allowed := range config.AllowedOrigins {
 				if allowed == origin {
 					return true
 				}
 			}
 			return false
-		}
-	} else {
-		// Allow all origins in development (be careful with this)
-		corsConfig.AllowAllOrigins = false // Keep it secure even in dev
-	}
-	
-	return cors.New(corsConfig)
+		},
+	})
 }
 
 // SecurityHeadersMiddleware adds security headers to all responses

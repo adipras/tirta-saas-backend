@@ -41,6 +41,7 @@ func main() {
 	r := gin.Default()
 
 	// Global middleware
+	r.Use(middleware.CORSMiddleware())
 	r.Use(middleware.RequestTracingMiddleware())
 	r.Use(middleware.PerformanceMonitoringMiddleware())
 
