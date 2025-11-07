@@ -2,8 +2,10 @@ package controllers
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/adipras/tirta-saas-backend/config"
+	"github.com/adipras/tirta-saas-backend/constants"
 	"github.com/adipras/tirta-saas-backend/models"
 	"github.com/adipras/tirta-saas-backend/utils"
 
@@ -37,7 +39,7 @@ func Register(c *gin.Context) {
 		Name:     input.AdminName,
 		Email:    input.AdminEmail,
 		Password: hashedPassword,
-		Role:     "admin",
+		Role:     string(constants.RoleTenantAdmin),
 	}
 
 	tx := config.DB.Begin()
@@ -48,7 +50,8 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	user.TenantID = tenant.ID
+	tenantID := tenant.ID
+	user.TenantID = &tenantID
 
 	if err := tx.Create(&user).Error; err != nil {
 		tx.Rollback()
@@ -236,5 +239,77 @@ func CustomerLogin(c *gin.Context) {
 		"token":       token,
 		"meter_number": customer.MeterNumber,
 		"name":        customer.Name,
+	})
+}
+
+type PlatformOwnerRegisterInput struct {
+	Name     string `json:"name" binding:"required,min=3"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6"`
+	SecretKey string `json:"secret_key" binding:"required"`
+}
+
+// RegisterPlatformOwner creates a platform owner account
+// @Summary Register platform owner
+// @Description Create a new platform owner account (requires secret key)
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body PlatformOwnerRegisterInput true "Platform owner data"
+// @Success 201 {object} map[string]string
+// @Failure 400,401,409 {object} map[string]string
+// @Router /auth/platform-owner/register [post]
+func RegisterPlatformOwner(c *gin.Context) {
+	var input PlatformOwnerRegisterInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify secret key (should be set in environment variable)
+	expectedSecretKey := os.Getenv("PLATFORM_OWNER_SECRET_KEY")
+	if expectedSecretKey == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Platform owner registration not configured"})
+		return
+	}
+
+	if input.SecretKey != expectedSecretKey {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid secret key"})
+		return
+	}
+
+	// Check if email already exists
+	var existingUser models.User
+	if err := config.DB.Where("email = ?", input.Email).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Email already registered"})
+		return
+	}
+
+	// Check if any platform owner already exists
+	var platformOwnerCount int64
+	config.DB.Model(&models.User{}).Where("role = ?", string(constants.RolePlatformOwner)).Count(&platformOwnerCount)
+	if platformOwnerCount > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Platform owner already exists"})
+		return
+	}
+
+	hashedPassword, _ := utils.HashPassword(input.Password)
+
+	user := models.User{
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: hashedPassword,
+		Role:     string(constants.RolePlatformOwner),
+		TenantID: nil, // Platform owner doesn't belong to any tenant
+	}
+
+	if err := config.DB.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create platform owner"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Platform owner account created successfully",
+		"email":   user.Email,
 	})
 }

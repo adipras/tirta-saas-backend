@@ -59,6 +59,7 @@ func main() {
 	routes.WaterUsageRoutes(r)
 	routes.InvoiceRoutes(r)
 	routes.PaymentRoutes(r)
+	routes.RegisterTenantUserRoutes(r)
 
 	logger.Info("🚀 Server ready and listening", map[string]interface{}{
 		"port": port,

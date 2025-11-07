@@ -13,6 +13,9 @@ func AuthRoutes(r *gin.Engine) {
 		auth.POST("/register", controllers.Register)
 		auth.POST("/login", controllers.Login)
 		
+		// Platform owner registration (requires secret key)
+		auth.POST("/platform-owner/register", controllers.RegisterPlatformOwner)
+		
 		// Customer authentication
 		auth.POST("/customer/login", controllers.CustomerLogin)
 	}

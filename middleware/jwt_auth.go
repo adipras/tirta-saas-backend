@@ -67,16 +67,23 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		tenantID, err := uuid.Parse(tenantIDStr)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid tenant_id format"})
-			c.Abort()
-			return
+		// Platform owner might not have tenant_id
+		var tenantID *uuid.UUID
+		if tenantIDStr != "" && tenantIDStr != "null" {
+			tid, err := uuid.Parse(tenantIDStr)
+			if err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid tenant_id format"})
+				c.Abort()
+				return
+			}
+			tenantID = &tid
 		}
 
 		// Simpan ke context
 		c.Set("user_id", userID)
-		c.Set("tenant_id", tenantID)
+		if tenantID != nil {
+			c.Set("tenant_id", *tenantID)
+		}
 		c.Set("role", role)
 
 		c.Next()
