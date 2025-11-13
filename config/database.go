@@ -43,15 +43,20 @@ func Migrate() {
 	// 1. Base entities first (no dependencies)
 	// 2. Entities with foreign keys last
 	err := DB.AutoMigrate(
-		&models.Tenant{},            // No dependencies
-		&models.User{},              // References Tenant
-		&models.SubscriptionType{},  // References Tenant
-		&models.Customer{},          // References Tenant + SubscriptionType
-		&models.WaterRate{},         // References Tenant + SubscriptionType
-		&models.WaterUsage{},        // References Tenant + Customer
-		&models.Invoice{},           // References Tenant + Customer
-		&models.Payment{},           // References Tenant + Invoice (must be after Invoice)
-		&models.AuditLog{},          // References Tenant (no other FK constraints)
+		&models.Tenant{},                     // No dependencies
+		&models.User{},                       // References Tenant
+		&models.SubscriptionType{},           // References Tenant
+		&models.Customer{},                   // References Tenant + SubscriptionType
+		&models.WaterRate{},                  // References Tenant + SubscriptionType
+		&models.WaterUsage{},                 // References Tenant + Customer
+		&models.Invoice{},                    // References Tenant + Customer
+		&models.Payment{},                    // References Tenant + Invoice (must be after Invoice)
+		&models.AuditLog{},                   // References Tenant (no other FK constraints)
+		&models.TenantSettings{},             // References Tenant
+		&models.SubscriptionPlanDetails{},    // No dependencies
+		&models.TenantSubscription{},         // References Tenant
+		&models.NotificationTemplate{},       // References Tenant
+		&models.NotificationLog{},            // References Tenant + NotificationTemplate
 	)
 
 	if err != nil {
