@@ -254,3 +254,85 @@ type BulkOperationResponse struct {
 	ProcessedAt      time.Time `json:"processed_at"`
 	DurationMs       int64    `json:"duration_ms"`
 }
+
+// TenantGrowthAnalyticsResponse represents tenant growth analytics
+type TenantGrowthAnalyticsResponse struct {
+	Period              string                  `json:"period"`
+	TotalTenants        int                     `json:"total_tenants"`
+	ActiveTenants       int                     `json:"active_tenants"`
+	NewTenants          int                     `json:"new_tenants"`
+	ChurnedTenants      int                     `json:"churned_tenants"`
+	GrowthRate          float64                 `json:"growth_rate_percent"`
+	ChurnRate           float64                 `json:"churn_rate_percent"`
+	MonthlyBreakdown    []MonthlyTenantStats    `json:"monthly_breakdown"`
+	TenantsByPlan       map[string]int          `json:"tenants_by_plan"`
+	TenantsByStatus     map[string]int          `json:"tenants_by_status"`
+}
+
+// MonthlyTenantStats represents monthly tenant statistics
+type MonthlyTenantStats struct {
+	Month          string  `json:"month"`
+	Year           int     `json:"year"`
+	NewTenants     int     `json:"new_tenants"`
+	ChurnedTenants int     `json:"churned_tenants"`
+	TotalTenants   int     `json:"total_tenants"`
+	GrowthRate     float64 `json:"growth_rate_percent"`
+}
+
+// RevenueAnalyticsResponse represents revenue analytics
+type RevenueAnalyticsResponse struct {
+	Period                  string              `json:"period"`
+	TotalRevenue            float64             `json:"total_revenue"`
+	MonthlyRecurringRevenue float64             `json:"monthly_recurring_revenue"`
+	AverageRevenuePerTenant float64             `json:"avg_revenue_per_tenant"`
+	OutstandingRevenue      float64             `json:"outstanding_revenue"`
+	MonthlyBreakdown        []MonthlyRevenueStats `json:"monthly_breakdown"`
+	RevenueByPlan           map[string]float64  `json:"revenue_by_plan"`
+	PaymentMethodStats      map[string]int      `json:"payment_method_stats"`
+}
+
+// MonthlyRevenueStats represents monthly revenue statistics
+type MonthlyRevenueStats struct {
+	Month         string  `json:"month"`
+	Year          int     `json:"year"`
+	Revenue       float64 `json:"revenue"`
+	Invoices      int     `json:"invoices"`
+	PaidInvoices  int     `json:"paid_invoices"`
+	GrowthRate    float64 `json:"growth_rate_percent"`
+}
+
+// UsageAnalyticsResponse represents system usage analytics
+type UsageAnalyticsResponse struct {
+	Period                  string                  `json:"period"`
+	TotalUsers              int                     `json:"total_users"`
+	ActiveUsers             int                     `json:"active_users"`
+	TotalCustomers          int                     `json:"total_customers"`
+	TotalWaterUsageM3       float64                 `json:"total_water_usage_m3"`
+	TotalInvoices           int                     `json:"total_invoices"`
+	TotalPayments           int                     `json:"total_payments"`
+	StorageUsedGB           float64                 `json:"storage_used_gb"`
+	APICallsTotal           int64                   `json:"api_calls_total"`
+	MonthlyUsageBreakdown   []MonthlyUsageStats     `json:"monthly_usage_breakdown"`
+	TopTenantsByUsage       []TenantUsageStats      `json:"top_tenants_by_usage"`
+}
+
+// MonthlyUsageStats represents monthly usage statistics
+type MonthlyUsageStats struct {
+	Month             string  `json:"month"`
+	Year              int     `json:"year"`
+	WaterUsageM3      float64 `json:"water_usage_m3"`
+	InvoicesIssued    int     `json:"invoices_issued"`
+	PaymentsReceived  int     `json:"payments_received"`
+	APICallsCount     int64   `json:"api_calls_count"`
+}
+
+// TenantUsageStats represents tenant usage statistics
+type TenantUsageStats struct {
+	TenantID      uuid.UUID `json:"tenant_id"`
+	TenantName    string    `json:"tenant_name"`
+	Customers     int       `json:"customers"`
+	WaterUsageM3  float64   `json:"water_usage_m3"`
+	Revenue       float64   `json:"revenue"`
+	StorageUsedGB float64   `json:"storage_used_gb"`
+}
+

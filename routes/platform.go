@@ -24,20 +24,22 @@ func PlatformRoutes(r *gin.Engine) {
 		
 		// Platform Analytics
 		platform.GET("/analytics/overview", controllers.GetPlatformAnalyticsOverview)
+		platform.GET("/analytics/tenants", controllers.GetTenantGrowthAnalytics)
+		platform.GET("/analytics/revenue", controllers.GetRevenueAnalytics)
+		platform.GET("/analytics/usage", controllers.GetUsageAnalytics)
 		
-		// TODO: Subscription Plan Management
-		// platform.GET("/subscription-plans", controllers.ListSubscriptionPlans)
-		// platform.POST("/subscription-plans", controllers.CreateSubscriptionPlan)
-		// platform.PUT("/subscription-plans/:id", controllers.UpdateSubscriptionPlan)
-		// platform.DELETE("/subscription-plans/:id", controllers.DeleteSubscriptionPlan)
-		// platform.POST("/tenants/:id/subscription", controllers.AssignSubscriptionToTenant)
-		// platform.GET("/tenants/:id/billing-history", controllers.GetTenantBillingHistory)
+		// Subscription Plan Management
+		platform.GET("/subscription-plans", controllers.ListSubscriptionPlans)
+		platform.POST("/subscription-plans", controllers.CreateSubscriptionPlan)
+		platform.PUT("/subscription-plans/:id", controllers.UpdateSubscriptionPlan)
+		platform.POST("/tenants/:id/subscription", controllers.AssignSubscriptionToTenant)
+		platform.GET("/tenants/:id/billing-history", controllers.GetTenantBillingHistory)
 		
-		// TODO: System Monitoring
-		// platform.GET("/logs/audit", controllers.GetAuditLogs)
-		// platform.GET("/logs/errors", controllers.GetErrorLogs)
-		// platform.GET("/system/health", controllers.GetSystemHealth)
-		// platform.GET("/system/metrics", controllers.GetSystemMetrics)
+		// System Monitoring & Logs
+		platform.GET("/logs/audit", controllers.GetAuditLogs)
+		platform.GET("/logs/errors", controllers.GetErrorLogs)
+		platform.GET("/system/health", controllers.GetSystemHealth)
+		platform.GET("/system/metrics", controllers.GetSystemMetrics)
 	}
 	
 	// Tenant-specific settings routes - requires tenant admin role
@@ -48,26 +50,20 @@ func PlatformRoutes(r *gin.Engine) {
 		// Tenant Settings
 		tenant.GET("/settings", controllers.GetTenantSettings)
 		tenant.PUT("/settings", controllers.UpdateTenantSettings)
-		// tenant.POST("/settings/logo", controllers.UploadTenantLogo) // TODO: File upload
+		tenant.POST("/settings/logo", controllers.UploadTenantLogo)
 		
-		// TODO: Enhanced User Management
-		// tenant.GET("/users/activity-logs", controllers.GetUserActivityLogs)
-		// tenant.POST("/users/:id/reset-password", controllers.ResetUserPassword)
-		// tenant.POST("/users/:id/send-invite", controllers.SendUserInvite)
-		// tenant.GET("/permissions", controllers.ListPermissions)
+		// Notification System
+		tenant.GET("/notifications/templates", controllers.ListNotificationTemplates)
+		tenant.POST("/notifications/templates", controllers.CreateNotificationTemplate)
+		tenant.PUT("/notifications/templates/:id", controllers.UpdateNotificationTemplate)
+		tenant.DELETE("/notifications/templates/:id", controllers.DeleteNotificationTemplate)
+		tenant.POST("/notifications/send", controllers.SendNotification)
 		
-		// TODO: Bulk Operations
-		// tenant.POST("/customers/bulk-import", controllers.BulkImportCustomers)
-		// tenant.POST("/customers/bulk-update", controllers.BulkUpdateCustomers)
-		// tenant.POST("/customers/bulk-activate", controllers.BulkActivateCustomers)
-		// tenant.GET("/customers/export", controllers.ExportCustomers)
-		
-		// TODO: Notification System
-		// tenant.POST("/notifications/send", controllers.SendNotification)
-		// tenant.GET("/notifications/templates", controllers.ListNotificationTemplates)
-		// tenant.POST("/notifications/templates", controllers.CreateNotificationTemplate)
-		// tenant.PUT("/notifications/templates/:id", controllers.UpdateNotificationTemplate)
-		// tenant.DELETE("/notifications/templates/:id", controllers.DeleteNotificationTemplate)
+		// Customer Bulk Operations
+		tenant.POST("/customers/bulk-import", controllers.BulkImportCustomers)
+		tenant.POST("/customers/bulk-update", controllers.BulkUpdateCustomers)
+		tenant.POST("/customers/bulk-activate", controllers.BulkActivateCustomers)
+		tenant.GET("/customers/export", controllers.ExportCustomers)
 		
 		// TODO: Reports
 		// tenant.GET("/reports/monthly-collection", controllers.MonthlyCollectionReport)

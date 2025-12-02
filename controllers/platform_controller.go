@@ -10,6 +10,7 @@ import (
 	"github.com/adipras/tirta-saas-backend/models"
 	"github.com/adipras/tirta-saas-backend/requests"
 	"github.com/adipras/tirta-saas-backend/responses"
+	"github.com/adipras/tirta-saas-backend/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -716,5 +717,805 @@ func UpdateTenantSettings(c *gin.Context) {
 		Status:  "success",
 		Message: "Tenant settings updated successfully",
 		Data:    settings,
+	})
+}
+
+// UploadTenantLogo handles logo upload for tenant
+func UploadTenantLogo(c *gin.Context) {
+	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+
+	// Get uploaded file
+	file, err := c.FormFile("logo")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, responses.ErrorResponse{
+			Status:  "error",
+			Message: "No file uploaded",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Configure upload
+	uploadConfig := utils.DefaultImageUploadConfig()
+	uploadConfig.UploadDir = fmt.Sprintf("uploads/tenants/%s/logos", tenantID.String())
+
+	// Save file
+	filePath, err := utils.SaveUploadedFile(file, uploadConfig)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Failed to upload file",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Get or create tenant settings
+	var settings models.TenantSettings
+	err = config.DB.Where("tenant_id = ?", tenantID).First(&settings).Error
+	if err != nil {
+		// Create new settings
+		settings = models.TenantSettings{
+			TenantID: tenantID,
+		}
+	}
+
+	// Delete old logo if exists
+	if settings.LogoURL != "" {
+		utils.DeleteFile(settings.LogoURL)
+	}
+
+	// Update logo URL
+	settings.LogoURL = filePath
+	if err := config.DB.Save(&settings).Error; err != nil {
+		// If save fails, delete uploaded file
+		utils.DeleteFile(filePath)
+		c.JSON(http.StatusInternalServerError, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Failed to update settings",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, responses.SuccessResponse{
+		Status:  "success",
+		Message: "Logo uploaded successfully",
+		Data: map[string]interface{}{
+			"logo_url": filePath,
+		},
+	})
+}
+
+// GetTenantGrowthAnalytics gets tenant growth analytics (Platform Owner only)
+func GetTenantGrowthAnalytics(c *gin.Context) {
+	// Get period parameter (default: last 6 months)
+	months := 6
+	if m := c.Query("months"); m != "" {
+		fmt.Sscanf(m, "%d", &months)
+	}
+	if months <= 0 || months > 24 {
+		months = 6
+	}
+
+	var analytics responses.TenantGrowthAnalyticsResponse
+	analytics.Period = fmt.Sprintf("Last %d months", months)
+
+	// Current stats
+	var totalTenants, activeTenants int64
+	config.DB.Model(&models.Tenant{}).Count(&totalTenants)
+	config.DB.Model(&models.Tenant{}).Where("status = ?", "ACTIVE").Count(&activeTenants)
+	analytics.TotalTenants = int(totalTenants)
+	analytics.ActiveTenants = int(activeTenants)
+
+	// Current month stats
+	firstDayOfMonth := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
+	var newTenants, churnedTenants int64
+	config.DB.Model(&models.Tenant{}).Where("created_at >= ?", firstDayOfMonth).Count(&newTenants)
+	config.DB.Model(&models.Tenant{}).Unscoped().Where("deleted_at >= ?", firstDayOfMonth).Count(&churnedTenants)
+	analytics.NewTenants = int(newTenants)
+	analytics.ChurnedTenants = int(churnedTenants)
+
+	// Calculate rates
+	if totalTenants > 0 {
+		analytics.GrowthRate = (float64(newTenants) / float64(totalTenants)) * 100
+		analytics.ChurnRate = (float64(churnedTenants) / float64(totalTenants)) * 100
+	}
+
+	// Monthly breakdown
+	analytics.MonthlyBreakdown = []responses.MonthlyTenantStats{}
+	for i := months - 1; i >= 0; i-- {
+		month := time.Now().AddDate(0, -i, 0)
+		firstDay := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.Local)
+		lastDay := firstDay.AddDate(0, 1, 0)
+
+		var monthNew, monthChurned, monthTotal int64
+		config.DB.Model(&models.Tenant{}).Where("created_at >= ? AND created_at < ?", firstDay, lastDay).Count(&monthNew)
+		config.DB.Model(&models.Tenant{}).Unscoped().Where("deleted_at >= ? AND deleted_at < ?", firstDay, lastDay).Count(&monthChurned)
+		config.DB.Model(&models.Tenant{}).Where("created_at < ?", lastDay).Count(&monthTotal)
+
+		growthRate := 0.0
+		if monthTotal > 0 {
+			growthRate = (float64(monthNew) / float64(monthTotal)) * 100
+		}
+
+		analytics.MonthlyBreakdown = append(analytics.MonthlyBreakdown, responses.MonthlyTenantStats{
+			Month:          month.Format("January"),
+			Year:           month.Year(),
+			NewTenants:     int(monthNew),
+			ChurnedTenants: int(monthChurned),
+			TotalTenants:   int(monthTotal),
+			GrowthRate:     growthRate,
+		})
+	}
+
+	// Tenants by plan
+	analytics.TenantsByPlan = make(map[string]int)
+	rows, _ := config.DB.Model(&models.Tenant{}).Select("subscription_plan, COUNT(*) as count").Group("subscription_plan").Rows()
+	defer rows.Close()
+	for rows.Next() {
+		var plan string
+		var count int
+		rows.Scan(&plan, &count)
+		analytics.TenantsByPlan[plan] = count
+	}
+
+	// Tenants by status
+	analytics.TenantsByStatus = make(map[string]int)
+	rows2, _ := config.DB.Model(&models.Tenant{}).Select("status, COUNT(*) as count").Group("status").Rows()
+	defer rows2.Close()
+	for rows2.Next() {
+		var status string
+		var count int
+		rows2.Scan(&status, &count)
+		analytics.TenantsByStatus[status] = count
+	}
+
+	c.JSON(http.StatusOK, responses.SuccessResponse{
+		Status:  "success",
+		Message: "Tenant growth analytics retrieved successfully",
+		Data:    analytics,
+	})
+}
+
+// GetRevenueAnalytics gets revenue analytics (Platform Owner only)
+func GetRevenueAnalytics(c *gin.Context) {
+	// Get period parameter
+	months := 6
+	if m := c.Query("months"); m != "" {
+		fmt.Sscanf(m, "%d", &months)
+	}
+	if months <= 0 || months > 24 {
+		months = 6
+	}
+
+	var analytics responses.RevenueAnalyticsResponse
+	analytics.Period = fmt.Sprintf("Last %d months", months)
+
+	// Total revenue
+	var totalRevenue float64
+	config.DB.Model(&models.Payment{}).Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue)
+	analytics.TotalRevenue = totalRevenue
+
+	// MRR - sum of all active subscriptions
+	var mrr float64
+	config.DB.Model(&models.TenantSubscription{}).
+		Where("status IN (?, ?)", "ACTIVE", "TRIAL").
+		Select("COALESCE(SUM(CASE WHEN billing_cycle = 'MONTHLY' THEN monthly_price ELSE yearly_price/12 END), 0)").
+		Scan(&mrr)
+	analytics.MonthlyRecurringRevenue = mrr
+
+	// Average revenue per tenant
+	var tenantCount int64
+	config.DB.Model(&models.Tenant{}).Where("status = ?", "ACTIVE").Count(&tenantCount)
+	if tenantCount > 0 {
+		analytics.AverageRevenuePerTenant = mrr / float64(tenantCount)
+	}
+
+	// Outstanding revenue
+	var outstanding float64
+	config.DB.Model(&models.Invoice{}).Where("payment_status != ?", "PAID").
+		Select("COALESCE(SUM(total_amount - paid_amount), 0)").Scan(&outstanding)
+	analytics.OutstandingRevenue = outstanding
+
+	// Monthly breakdown
+	analytics.MonthlyBreakdown = []responses.MonthlyRevenueStats{}
+	for i := months - 1; i >= 0; i-- {
+		month := time.Now().AddDate(0, -i, 0)
+		firstDay := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.Local)
+		lastDay := firstDay.AddDate(0, 1, 0)
+
+		var monthRevenue float64
+		var monthInvoices, monthPaid int64
+		config.DB.Model(&models.Payment{}).Where("created_at >= ? AND created_at < ?", firstDay, lastDay).
+			Select("COALESCE(SUM(amount), 0)").Scan(&monthRevenue)
+		config.DB.Model(&models.Invoice{}).Where("created_at >= ? AND created_at < ?", firstDay, lastDay).Count(&monthInvoices)
+		config.DB.Model(&models.Invoice{}).Where("payment_status = ? AND updated_at >= ? AND updated_at < ?", "PAID", firstDay, lastDay).Count(&monthPaid)
+
+		analytics.MonthlyBreakdown = append(analytics.MonthlyBreakdown, responses.MonthlyRevenueStats{
+			Month:        month.Format("January"),
+			Year:         month.Year(),
+			Revenue:      monthRevenue,
+			Invoices:     int(monthInvoices),
+			PaidInvoices: int(monthPaid),
+			GrowthRate:   0.0, // Can calculate if needed
+		})
+	}
+
+	// Revenue by plan
+	analytics.RevenueByPlan = make(map[string]float64)
+	rows, _ := config.DB.Raw(`
+		SELECT t.subscription_plan, COALESCE(SUM(p.amount), 0) as revenue
+		FROM tenants t
+		LEFT JOIN invoices i ON i.tenant_id = t.id
+		LEFT JOIN payments p ON p.invoice_id = i.id
+		GROUP BY t.subscription_plan
+	`).Rows()
+	defer rows.Close()
+	for rows.Next() {
+		var plan string
+		var revenue float64
+		rows.Scan(&plan, &revenue)
+		analytics.RevenueByPlan[plan] = revenue
+	}
+
+	// Payment method stats
+	analytics.PaymentMethodStats = make(map[string]int)
+	rows2, _ := config.DB.Model(&models.Payment{}).Select("payment_method, COUNT(*) as count").Group("payment_method").Rows()
+	defer rows2.Close()
+	for rows2.Next() {
+		var method string
+		var count int
+		rows2.Scan(&method, &count)
+		analytics.PaymentMethodStats[method] = count
+	}
+
+	c.JSON(http.StatusOK, responses.SuccessResponse{
+		Status:  "success",
+		Message: "Revenue analytics retrieved successfully",
+		Data:    analytics,
+	})
+}
+
+// GetUsageAnalytics gets system usage analytics (Platform Owner only)
+func GetUsageAnalytics(c *gin.Context) {
+	months := 6
+	if m := c.Query("months"); m != "" {
+		fmt.Sscanf(m, "%d", &months)
+	}
+	if months <= 0 || months > 24 {
+		months = 6
+	}
+
+	var analytics responses.UsageAnalyticsResponse
+	analytics.Period = fmt.Sprintf("Last %d months", months)
+
+	// Overall stats
+	var totalUsers, activeUsers, totalCustomers int64
+	config.DB.Model(&models.User{}).Count(&totalUsers)
+	config.DB.Model(&models.User{}).Where("is_active = ?", true).Count(&activeUsers)
+	config.DB.Model(&models.Customer{}).Count(&totalCustomers)
+	analytics.TotalUsers = int(totalUsers)
+	analytics.ActiveUsers = int(activeUsers)
+	analytics.TotalCustomers = int(totalCustomers)
+
+	// Water usage
+	var totalWaterUsage float64
+	config.DB.Model(&models.WaterUsage{}).Select("COALESCE(SUM(current_reading - previous_reading), 0)").Scan(&totalWaterUsage)
+	analytics.TotalWaterUsageM3 = totalWaterUsage
+
+	// Invoices and payments
+	var totalInvoices, totalPayments int64
+	config.DB.Model(&models.Invoice{}).Count(&totalInvoices)
+	config.DB.Model(&models.Payment{}).Count(&totalPayments)
+	analytics.TotalInvoices = int(totalInvoices)
+	analytics.TotalPayments = int(totalPayments)
+
+	// Storage used
+	var storageUsed float64
+	config.DB.Model(&models.Tenant{}).Select("COALESCE(SUM(storage_used_gb), 0)").Scan(&storageUsed)
+	analytics.StorageUsedGB = storageUsed
+
+	// API calls (placeholder - would need separate tracking)
+	analytics.APICallsTotal = 0
+
+	// Monthly breakdown
+	analytics.MonthlyUsageBreakdown = []responses.MonthlyUsageStats{}
+	for i := months - 1; i >= 0; i-- {
+		month := time.Now().AddDate(0, -i, 0)
+		firstDay := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.Local)
+		lastDay := firstDay.AddDate(0, 1, 0)
+
+		var monthWaterUsage float64
+		var monthInvoices, monthPayments int64
+		config.DB.Model(&models.WaterUsage{}).Where("reading_date >= ? AND reading_date < ?", firstDay, lastDay).
+			Select("COALESCE(SUM(current_reading - previous_reading), 0)").Scan(&monthWaterUsage)
+		config.DB.Model(&models.Invoice{}).Where("created_at >= ? AND created_at < ?", firstDay, lastDay).Count(&monthInvoices)
+		config.DB.Model(&models.Payment{}).Where("created_at >= ? AND created_at < ?", firstDay, lastDay).Count(&monthPayments)
+
+		analytics.MonthlyUsageBreakdown = append(analytics.MonthlyUsageBreakdown, responses.MonthlyUsageStats{
+			Month:            month.Format("January"),
+			Year:             month.Year(),
+			WaterUsageM3:     monthWaterUsage,
+			InvoicesIssued:   int(monthInvoices),
+			PaymentsReceived: int(monthPayments),
+			APICallsCount:    0,
+		})
+	}
+
+	// Top tenants by usage
+	analytics.TopTenantsByUsage = []responses.TenantUsageStats{}
+	rows, _ := config.DB.Raw(`
+		SELECT t.id, t.name, t.total_customers, 
+		       COALESCE(SUM(wu.current_reading - wu.previous_reading), 0) as water_usage,
+		       COALESCE(SUM(p.amount), 0) as revenue,
+		       t.storage_used_gb
+		FROM tenants t
+		LEFT JOIN customers c ON c.tenant_id = t.id
+		LEFT JOIN water_usages wu ON wu.customer_id = c.id
+		LEFT JOIN invoices i ON i.tenant_id = t.id
+		LEFT JOIN payments p ON p.invoice_id = i.id
+		GROUP BY t.id, t.name, t.total_customers, t.storage_used_gb
+		ORDER BY water_usage DESC
+		LIMIT 10
+	`).Rows()
+	defer rows.Close()
+	for rows.Next() {
+		var stat responses.TenantUsageStats
+		rows.Scan(&stat.TenantID, &stat.TenantName, &stat.Customers, &stat.WaterUsageM3, &stat.Revenue, &stat.StorageUsedGB)
+		analytics.TopTenantsByUsage = append(analytics.TopTenantsByUsage, stat)
+	}
+
+	c.JSON(http.StatusOK, responses.SuccessResponse{
+		Status:  "success",
+		Message: "Usage analytics retrieved successfully",
+		Data:    analytics,
+	})
+}
+
+// ListSubscriptionPlans lists all available subscription plans
+func ListSubscriptionPlans(c *gin.Context) {
+	var plans []models.SubscriptionPlanDetails
+	
+	query := config.DB.Model(&models.SubscriptionPlanDetails{})
+	
+	// Only show active plans by default
+	if c.Query("include_inactive") != "true" {
+		query = query.Where("is_active = ?", true)
+	}
+	
+	query = query.Order("display_order ASC, monthly_price ASC")
+	
+	if err := query.Find(&plans).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Failed to fetch subscription plans",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	// Transform to response
+	var planList []responses.SubscriptionPlanResponse
+	for _, plan := range plans {
+		var features []string
+		if plan.Features != "" {
+			json.Unmarshal([]byte(plan.Features), &features)
+		}
+		
+		planList = append(planList, responses.SubscriptionPlanResponse{
+			ID:                plan.ID,
+			Plan:              string(plan.Plan),
+			Name:              plan.Name,
+			Description:       plan.Description,
+			MonthlyPrice:      plan.MonthlyPrice,
+			YearlyPrice:       plan.YearlyPrice,
+			MaxUsers:          plan.MaxUsers,
+			MaxCustomers:      plan.MaxCustomers,
+			MaxStorageGB:      plan.MaxStorageGB,
+			MaxAPICallsPerDay: plan.MaxAPICallsPerDay,
+			Features:          features,
+			TrialDays:         plan.TrialDays,
+			DisplayOrder:      plan.DisplayOrder,
+			IsActive:          plan.IsActive,
+			CreatedAt:         plan.CreatedAt,
+			UpdatedAt:         plan.UpdatedAt,
+		})
+	}
+	
+	c.JSON(http.StatusOK, responses.SuccessResponse{
+		Status:  "success",
+		Message: "Subscription plans retrieved successfully",
+		Data:    planList,
+	})
+}
+
+// CreateSubscriptionPlan creates a new subscription plan
+func CreateSubscriptionPlan(c *gin.Context) {
+	var req requests.CreateSubscriptionPlanRequest
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Invalid request body",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	// Check if plan already exists
+	var existingPlan models.SubscriptionPlanDetails
+	if err := config.DB.Where("plan = ?", req.Plan).First(&existingPlan).Error; err == nil {
+		c.JSON(http.StatusConflict, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Subscription plan already exists",
+			Error:   "Plan with this code already exists",
+		})
+		return
+	}
+	
+	// Convert features to JSON
+	featuresJSON, _ := json.Marshal(req.Features)
+	
+	plan := models.SubscriptionPlanDetails{
+		Plan:              models.SubscriptionPlan(req.Plan),
+		Name:              req.Name,
+		Description:       req.Description,
+		MonthlyPrice:      req.MonthlyPrice,
+		YearlyPrice:       req.YearlyPrice,
+		MaxUsers:          req.MaxUsers,
+		MaxCustomers:      req.MaxCustomers,
+		MaxStorageGB:      req.MaxStorageGB,
+		MaxAPICallsPerDay: req.MaxAPICallsPerDay,
+		Features:          string(featuresJSON),
+		TrialDays:         req.TrialDays,
+		DisplayOrder:      req.DisplayOrder,
+		IsActive:          true,
+	}
+	
+	if err := config.DB.Create(&plan).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Failed to create subscription plan",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	var features []string
+	json.Unmarshal([]byte(plan.Features), &features)
+	
+	c.JSON(http.StatusCreated, responses.SuccessResponse{
+		Status:  "success",
+		Message: "Subscription plan created successfully",
+		Data: responses.SubscriptionPlanResponse{
+			ID:                plan.ID,
+			Plan:              string(plan.Plan),
+			Name:              plan.Name,
+			Description:       plan.Description,
+			MonthlyPrice:      plan.MonthlyPrice,
+			YearlyPrice:       plan.YearlyPrice,
+			MaxUsers:          plan.MaxUsers,
+			MaxCustomers:      plan.MaxCustomers,
+			MaxStorageGB:      plan.MaxStorageGB,
+			MaxAPICallsPerDay: plan.MaxAPICallsPerDay,
+			Features:          features,
+			TrialDays:         plan.TrialDays,
+			DisplayOrder:      plan.DisplayOrder,
+			IsActive:          plan.IsActive,
+			CreatedAt:         plan.CreatedAt,
+			UpdatedAt:         plan.UpdatedAt,
+		},
+	})
+}
+
+// UpdateSubscriptionPlan updates an existing subscription plan
+func UpdateSubscriptionPlan(c *gin.Context) {
+	planID := c.Param("id")
+	
+	var plan models.SubscriptionPlanDetails
+	if err := config.DB.Where("id = ?", planID).First(&plan).Error; err != nil {
+		c.JSON(http.StatusNotFound, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Subscription plan not found",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	var req requests.UpdateSubscriptionPlanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Invalid request body",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	// Update fields
+	if req.Name != "" {
+		plan.Name = req.Name
+	}
+	if req.Description != "" {
+		plan.Description = req.Description
+	}
+	if req.MonthlyPrice > 0 {
+		plan.MonthlyPrice = req.MonthlyPrice
+	}
+	if req.YearlyPrice > 0 {
+		plan.YearlyPrice = req.YearlyPrice
+	}
+	if req.MaxUsers > 0 {
+		plan.MaxUsers = req.MaxUsers
+	}
+	if req.MaxCustomers > 0 {
+		plan.MaxCustomers = req.MaxCustomers
+	}
+	if req.MaxStorageGB > 0 {
+		plan.MaxStorageGB = req.MaxStorageGB
+	}
+	if req.MaxAPICallsPerDay > 0 {
+		plan.MaxAPICallsPerDay = req.MaxAPICallsPerDay
+	}
+	if req.Features != nil {
+		featuresJSON, _ := json.Marshal(req.Features)
+		plan.Features = string(featuresJSON)
+	}
+	if req.TrialDays >= 0 {
+		plan.TrialDays = req.TrialDays
+	}
+	if req.DisplayOrder > 0 {
+		plan.DisplayOrder = req.DisplayOrder
+	}
+	if req.IsActive != nil {
+		plan.IsActive = *req.IsActive
+	}
+	
+	if err := config.DB.Save(&plan).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Failed to update subscription plan",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	var features []string
+	json.Unmarshal([]byte(plan.Features), &features)
+	
+	c.JSON(http.StatusOK, responses.SuccessResponse{
+		Status:  "success",
+		Message: "Subscription plan updated successfully",
+		Data: responses.SubscriptionPlanResponse{
+			ID:                plan.ID,
+			Plan:              string(plan.Plan),
+			Name:              plan.Name,
+			Description:       plan.Description,
+			MonthlyPrice:      plan.MonthlyPrice,
+			YearlyPrice:       plan.YearlyPrice,
+			MaxUsers:          plan.MaxUsers,
+			MaxCustomers:      plan.MaxCustomers,
+			MaxStorageGB:      plan.MaxStorageGB,
+			MaxAPICallsPerDay: plan.MaxAPICallsPerDay,
+			Features:          features,
+			TrialDays:         plan.TrialDays,
+			DisplayOrder:      plan.DisplayOrder,
+			IsActive:          plan.IsActive,
+			CreatedAt:         plan.CreatedAt,
+			UpdatedAt:         plan.UpdatedAt,
+		},
+	})
+}
+
+// AssignSubscriptionToTenant assigns a subscription plan to a tenant
+func AssignSubscriptionToTenant(c *gin.Context) {
+	tenantID := c.Param("id")
+	
+	var tenant models.Tenant
+	if err := config.DB.Where("id = ?", tenantID).First(&tenant).Error; err != nil {
+		c.JSON(http.StatusNotFound, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Tenant not found",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	var req requests.AssignSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Invalid request body",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	// Get plan details
+	var planDetails models.SubscriptionPlanDetails
+	if err := config.DB.Where("plan = ? AND is_active = ?", req.Plan, true).First(&planDetails).Error; err != nil {
+		c.JSON(http.StatusNotFound, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Subscription plan not found or inactive",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	// Parse start date or use current time
+	startDate := time.Now()
+	if req.StartDate != "" {
+		parsedDate, err := time.Parse("2006-01-02", req.StartDate)
+		if err == nil {
+			startDate = parsedDate
+		}
+	}
+	
+	// Calculate end date based on billing cycle
+	var endDate time.Time
+	if req.BillingCycle == "MONTHLY" {
+		endDate = startDate.AddDate(0, 1, 0)
+	} else {
+		endDate = startDate.AddDate(1, 0, 0)
+	}
+	
+	// Calculate trial end date
+	var trialEndsAt *time.Time
+	trialDays := req.TrialDays
+	if trialDays == 0 {
+		trialDays = planDetails.TrialDays
+	}
+	if trialDays > 0 {
+		trialEnd := startDate.AddDate(0, 0, trialDays)
+		trialEndsAt = &trialEnd
+	}
+	
+	// Get or create subscription
+	var subscription models.TenantSubscription
+	err := config.DB.Where("tenant_id = ?", tenantID).First(&subscription).Error
+	
+	if err != nil {
+		// Create new subscription
+		subscription = models.TenantSubscription{
+			TenantID:          uuid.MustParse(tenantID),
+			Plan:              models.SubscriptionPlan(req.Plan),
+			Status:            models.StatusTrial,
+			BillingCycle:      models.BillingCycle(req.BillingCycle),
+			MonthlyPrice:      planDetails.MonthlyPrice,
+			YearlyPrice:       planDetails.YearlyPrice,
+			MaxUsers:          planDetails.MaxUsers,
+			MaxCustomers:      planDetails.MaxCustomers,
+			MaxStorageGB:      planDetails.MaxStorageGB,
+			MaxAPICallsPerDay: planDetails.MaxAPICallsPerDay,
+			StartDate:         startDate,
+			EndDate:           endDate,
+			TrialEndsAt:       trialEndsAt,
+			PaymentStatus:     "PENDING",
+		}
+		
+		if trialDays == 0 {
+			subscription.Status = models.StatusActive
+		}
+		
+		if err := config.DB.Create(&subscription).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, responses.ErrorResponse{
+				Status:  "error",
+				Message: "Failed to create subscription",
+				Error:   err.Error(),
+			})
+			return
+		}
+	} else {
+		// Update existing subscription
+		subscription.Plan = models.SubscriptionPlan(req.Plan)
+		subscription.BillingCycle = models.BillingCycle(req.BillingCycle)
+		subscription.MonthlyPrice = planDetails.MonthlyPrice
+		subscription.YearlyPrice = planDetails.YearlyPrice
+		subscription.MaxUsers = planDetails.MaxUsers
+		subscription.MaxCustomers = planDetails.MaxCustomers
+		subscription.MaxStorageGB = planDetails.MaxStorageGB
+		subscription.MaxAPICallsPerDay = planDetails.MaxAPICallsPerDay
+		subscription.StartDate = startDate
+		subscription.EndDate = endDate
+		subscription.TrialEndsAt = trialEndsAt
+		
+		if trialDays > 0 {
+			subscription.Status = models.StatusTrial
+		} else if subscription.Status != models.StatusActive {
+			subscription.Status = models.StatusActive
+		}
+		
+		if err := config.DB.Save(&subscription).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, responses.ErrorResponse{
+				Status:  "error",
+				Message: "Failed to update subscription",
+				Error:   err.Error(),
+			})
+			return
+		}
+	}
+	
+	// Update tenant
+	tenant.SubscriptionPlan = req.Plan
+	tenant.SubscriptionStatus = string(subscription.Status)
+	tenant.SubscriptionEndsAt = &endDate
+	config.DB.Save(&tenant)
+	
+	c.JSON(http.StatusOK, responses.SuccessResponse{
+		Status:  "success",
+		Message: "Subscription assigned successfully",
+		Data: responses.TenantSubscriptionResponse{
+			ID:                subscription.ID,
+			TenantID:          subscription.TenantID,
+			Plan:              string(subscription.Plan),
+			Status:            string(subscription.Status),
+			BillingCycle:      string(subscription.BillingCycle),
+			MonthlyPrice:      subscription.MonthlyPrice,
+			YearlyPrice:       subscription.YearlyPrice,
+			MaxUsers:          subscription.MaxUsers,
+			MaxCustomers:      subscription.MaxCustomers,
+			MaxStorageGB:      subscription.MaxStorageGB,
+			MaxAPICallsPerDay: subscription.MaxAPICallsPerDay,
+			StartDate:         subscription.StartDate,
+			EndDate:           subscription.EndDate,
+			NextBillingAt:     subscription.NextBillingAt,
+			LastBilledAt:      subscription.LastBilledAt,
+			TrialEndsAt:       subscription.TrialEndsAt,
+			LastPaymentAmount: subscription.LastPaymentAmount,
+			LastPaymentDate:   subscription.LastPaymentDate,
+			PaymentStatus:     subscription.PaymentStatus,
+			Notes:             subscription.Notes,
+			CreatedAt:         subscription.CreatedAt,
+			UpdatedAt:         subscription.UpdatedAt,
+		},
+	})
+}
+
+// GetTenantBillingHistory gets the billing history for a tenant
+func GetTenantBillingHistory(c *gin.Context) {
+	tenantID := c.Param("id")
+	
+	// Verify tenant exists
+	var tenant models.Tenant
+	if err := config.DB.Where("id = ?", tenantID).First(&tenant).Error; err != nil {
+		c.JSON(http.StatusNotFound, responses.ErrorResponse{
+			Status:  "error",
+			Message: "Tenant not found",
+			Error:   err.Error(),
+		})
+		return
+	}
+	
+	// Get all payments for this tenant's invoices
+	var payments []models.Payment
+	config.DB.Joins("JOIN invoices ON invoices.id = payments.invoice_id").
+		Where("invoices.tenant_id = ?", tenantID).
+		Order("payments.created_at DESC").
+		Limit(100).
+		Find(&payments)
+	
+	// Get subscription history
+	var subscriptions []models.TenantSubscription
+	config.DB.Where("tenant_id = ?", tenantID).
+		Order("created_at DESC").
+		Find(&subscriptions)
+	
+	var totalPaid float64
+	for _, payment := range payments {
+		totalPaid += payment.Amount
+	}
+	
+	c.JSON(http.StatusOK, responses.SuccessResponse{
+		Status:  "success",
+		Message: "Billing history retrieved successfully",
+		Data: map[string]interface{}{
+			"tenant_id":      tenantID,
+			"tenant_name":    tenant.Name,
+			"payments":       payments,
+			"subscriptions":  subscriptions,
+			"total_paid":     totalPaid,
+			"current_status": tenant.SubscriptionStatus,
+		},
 	})
 }

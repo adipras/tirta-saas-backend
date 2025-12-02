@@ -34,3 +34,6 @@ go.sum
 # Ignore release script
 scripts/release.sh
 .env
+
+# Uploads
+uploads/
