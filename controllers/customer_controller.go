@@ -13,6 +13,18 @@ import (
 	"github.com/adipras/tirta-saas-backend/utils"
 )
 
+// CreateCustomer godoc
+// @Summary Create new customer
+// @Description Create a new customer with subscription
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Param request body requests.CreateCustomerRequest true "Create customer request"
+// @Security BearerAuth
+// @Success 201 {object} responses.CustomerResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Router /api/customers [post]
 func CreateCustomer(c *gin.Context) {
 	var req requests.CreateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -101,6 +113,16 @@ func CreateCustomer(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
+// GetCustomers godoc
+// @Summary List customers
+// @Description Get list of all customers for the tenant
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} responses.CustomerResponse
+// @Failure 401 {object} map[string]interface{}
+// @Router /api/customers [get]
 func GetCustomers(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	var customers []models.Customer
@@ -134,6 +156,18 @@ func GetCustomers(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// GetCustomer godoc
+// @Summary Get customer by ID
+// @Description Get detailed information of a specific customer
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Param id path string true "Customer ID"
+// @Security BearerAuth
+// @Success 200 {object} responses.CustomerResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/customers/{id} [get]
 func GetCustomer(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	id := c.Param("id")
@@ -159,6 +193,19 @@ func GetCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// UpdateCustomer godoc
+// @Summary Update customer
+// @Description Update customer information
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Param id path string true "Customer ID"
+// @Param request body requests.UpdateCustomerRequest true "Update customer request"
+// @Security BearerAuth
+// @Success 200 {object} responses.CustomerResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/customers/{id} [put]
 func UpdateCustomer(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	id := c.Param("id")
@@ -198,6 +245,18 @@ func UpdateCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// DeleteCustomer godoc
+// @Summary Delete customer
+// @Description Delete a customer by ID
+// @Tags Customers
+// @Accept json
+// @Produce json
+// @Param id path string true "Customer ID"
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/customers/{id} [delete]
 func DeleteCustomer(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	id := c.Param("id")

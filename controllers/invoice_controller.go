@@ -11,6 +11,23 @@ import (
 	"github.com/google/uuid"
 )
 
+// GenerateMonthlyInvoiceRequest represents the request body for generating monthly invoice
+type GenerateMonthlyInvoiceRequest struct {
+	UsageMonth string `json:"usage_month" binding:"required" example:"2024-01"` // format: YYYY-MM
+}
+
+// GenerateMonthlyInvoice godoc
+// @Summary Generate monthly invoice
+// @Description Generate monthly invoice for a customer
+// @Tags Invoices
+// @Accept json
+// @Produce json
+// @Param request body GenerateMonthlyInvoiceRequest true "Generate invoice request"
+// @Security BearerAuth
+// @Success 201 {object} responses.InvoiceResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/invoices/generate [post]
 func GenerateMonthlyInvoice(c *gin.Context) {
 	type Request struct {
 		UsageMonth string `json:"usage_month" binding:"required"` // format: YYYY-MM
@@ -108,6 +125,18 @@ func GenerateMonthlyInvoice(c *gin.Context) {
 	})
 }
 
+// GetInvoices godoc
+// @Summary List invoices
+// @Description Get all invoices for the tenant
+// @Tags Invoices
+// @Accept json
+// @Produce json
+// @Param status query string false "Filter by status"
+// @Param customer_id query string false "Filter by customer ID"
+// @Security BearerAuth
+// @Success 200 {array} responses.InvoiceResponse
+// @Failure 401 {object} map[string]interface{}
+// @Router /api/invoices [get]
 func GetInvoices(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	var invoices []models.Invoice
@@ -144,6 +173,18 @@ func GetInvoices(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// GetInvoice godoc
+// @Summary Get invoice by ID
+// @Description Get a specific invoice details
+// @Tags Invoices
+// @Accept json
+// @Produce json
+// @Param id path string true "Invoice ID"
+// @Security BearerAuth
+// @Success 200 {object} responses.InvoiceResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/invoices/{id} [get]
 func GetInvoice(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	id := c.Param("id")

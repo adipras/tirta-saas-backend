@@ -21,6 +21,16 @@ type RegisterInput struct {
 	AdminPassword string `json:"admin_password" binding:"required,min=6"`
 }
 
+// Register creates a new tenant and admin user
+// @Summary Register new tenant
+// @Description Register a new tenant organization with admin user
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body RegisterInput true "Registration data"
+// @Success 201 {object} map[string]string
+// @Failure 400,500 {object} map[string]string
+// @Router /auth/register [post]
 func Register(c *gin.Context) {
 	var input RegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -69,6 +79,16 @@ type LoginInput struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// Login authenticates a user
+// @Summary User login
+// @Description Authenticate user and get JWT token
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body LoginInput true "Login credentials"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400,401,500 {object} map[string]string
+// @Router /auth/login [post]
 func Login(c *gin.Context) {
 	var input LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -109,6 +129,17 @@ type CreateCustomerAccountInput struct {
 	SubscriptionID string `json:"subscription_id" binding:"required"`
 }
 
+// CreateCustomerAccount creates a customer account
+// @Summary Create customer account
+// @Description Create a new customer account with meter number
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body CreateCustomerAccountInput true "Customer account data"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400,401,404,409,500 {object} map[string]string
+// @Router /auth/create-customer [post]
 func CreateCustomerAccount(c *gin.Context) {
 	var input CreateCustomerAccountInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -206,6 +237,16 @@ type CustomerLoginInput struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// CustomerLogin authenticates a customer
+// @Summary Customer login
+// @Description Authenticate customer and get JWT token
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body CustomerLoginInput true "Customer login credentials"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400,401,500 {object} map[string]string
+// @Router /auth/customer/login [post]
 func CustomerLogin(c *gin.Context) {
 	var input CustomerLoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {

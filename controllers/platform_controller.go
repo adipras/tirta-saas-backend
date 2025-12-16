@@ -15,7 +15,23 @@ import (
 	"github.com/google/uuid"
 )
 
-// ListTenants lists all tenants with pagination and filters (Platform Owner only)
+// ListTenants godoc
+// @Summary List all tenants
+// @Description Get list of all tenants with pagination and filters (Platform Admin only)
+// @Tags Platform
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20)
+// @Param search query string false "Search by name or email"
+// @Param status query string false "Filter by status"
+// @Param sort_by query string false "Sort by field" default(created_at)
+// @Param sort_order query string false "Sort order (asc/desc)" default(desc)
+// @Security BearerAuth
+// @Success 200 {object} responses.PaginatedResponse
+// @Failure 400 {object} responses.ErrorResponse
+// @Failure 401 {object} responses.ErrorResponse
+// @Router /api/platform/tenants [get]
 func ListTenants(c *gin.Context) {
 	var req requests.TenantSearchRequest
 	
@@ -118,6 +134,18 @@ func ListTenants(c *gin.Context) {
 }
 
 // GetTenantDetail gets detailed tenant information (Platform Owner only)
+// GetTenantDetail godoc
+// @Summary Get tenant detail
+// @Description Get detailed information of a specific tenant
+// @Tags Platform
+// @Accept json
+// @Produce json
+// @Param id path string true "Tenant ID"
+// @Security BearerAuth
+// @Success 200 {object} responses.TenantDetailResponse
+// @Failure 400 {object} responses.ErrorResponse
+// @Failure 404 {object} responses.ErrorResponse
+// @Router /api/platform/tenants/{id} [get]
 func GetTenantDetail(c *gin.Context) {
 	tenantID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -165,7 +193,19 @@ func GetTenantDetail(c *gin.Context) {
 	})
 }
 
-// UpdateTenant updates tenant information (Platform Owner only)
+// UpdateTenant godoc
+// @Summary Update tenant information
+// @Description Update tenant details (Platform Admin only)
+// @Tags Platform
+// @Accept json
+// @Produce json
+// @Param id path string true "Tenant ID"
+// @Param request body requests.UpdateTenantRequest true "Update tenant request"
+// @Security BearerAuth
+// @Success 200 {object} responses.SuccessResponse
+// @Failure 400 {object} responses.ErrorResponse
+// @Failure 404 {object} responses.ErrorResponse
+// @Router /api/platform/tenants/{id} [put]
 func UpdateTenant(c *gin.Context) {
 	tenantID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -231,7 +271,18 @@ func UpdateTenant(c *gin.Context) {
 	})
 }
 
-// SuspendTenant suspends a tenant (Platform Owner only)
+// SuspendTenant godoc
+// @Summary Suspend tenant
+// @Description Suspend a tenant account (Platform Admin only)
+// @Tags Platform
+// @Accept json
+// @Produce json
+// @Param id path string true "Tenant ID"
+// @Security BearerAuth
+// @Success 200 {object} responses.SuccessResponse
+// @Failure 400 {object} responses.ErrorResponse
+// @Failure 404 {object} responses.ErrorResponse
+// @Router /api/platform/tenants/{id}/suspend [post]
 func SuspendTenant(c *gin.Context) {
 	tenantID, err := uuid.Parse(c.Param("id"))
 	if err != nil {

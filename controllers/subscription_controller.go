@@ -11,6 +11,17 @@ import (
 	"github.com/google/uuid"
 )
 
+// CreateSubscriptionType godoc
+// @Summary Create subscription type
+// @Description Create a new subscription type/plan
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Param request body requests.CreateSubscriptionTypeRequest true "Create subscription type request"
+// @Security BearerAuth
+// @Success 200 {object} responses.SubscriptionTypeResponse
+// @Failure 400 {object} map[string]interface{}
+// @Router /api/subscription-types [post]
 func CreateSubscriptionType(c *gin.Context) {
 	var req requests.CreateSubscriptionTypeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -51,6 +62,16 @@ func CreateSubscriptionType(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
+// GetAllSubscriptionTypes godoc
+// @Summary List subscription types
+// @Description Get all subscription types/plans for the tenant
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} responses.SubscriptionTypeResponse
+// @Failure 401 {object} map[string]interface{}
+// @Router /api/subscription-types [get]
 func GetAllSubscriptionTypes(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 
@@ -79,6 +100,18 @@ func GetAllSubscriptionTypes(c *gin.Context) {
 	c.JSON(http.StatusOK, responseList)
 }
 
+// GetSubscriptionType godoc
+// @Summary Get subscription type
+// @Description Get a specific subscription type by ID
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Param id path string true "Subscription Type ID"
+// @Security BearerAuth
+// @Success 200 {object} responses.SubscriptionTypeResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/subscription-types/{id} [get]
 func GetSubscriptionType(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	id := c.Param("id")
@@ -110,6 +143,19 @@ func GetSubscriptionType(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// UpdateSubscriptionType godoc
+// @Summary Update subscription type
+// @Description Update an existing subscription type
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Param id path string true "Subscription Type ID"
+// @Param request body requests.UpdateSubscriptionTypeRequest true "Update subscription type request"
+// @Security BearerAuth
+// @Success 200 {object} responses.SubscriptionTypeResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/subscription-types/{id} [put]
 func UpdateSubscriptionType(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	id := c.Param("id")
@@ -160,6 +206,18 @@ func UpdateSubscriptionType(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// DeleteSubscriptionType godoc
+// @Summary Delete subscription type
+// @Description Delete a subscription type by ID
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Param id path string true "Subscription Type ID"
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/subscription-types/{id} [delete]
 func DeleteSubscriptionType(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	id := c.Param("id")

@@ -37,3 +37,24 @@ scripts/release.sh
 
 # Uploads
 uploads/
+
+# Generated Postman files (can be regenerated with scripts)
+openapi.json
+openapi.yaml
+docs/*.postman_collection.json
+docs/*.postman_environment.json
+
+# Temporary build files
+tirta-backend-temp
+
+# Binary output
+tirta-saas-backend
+tirta-backend
+test_migration
+test-build
+test-openapi
+
+# Swagger generated docs (can be regenerated)
+docs/docs.go
+docs/swagger.json
+docs/swagger.yaml

@@ -13,6 +13,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// CreatePayment godoc
+// @Summary Create payment
+// @Description Record a new payment for an invoice
+// @Tags Payments
+// @Accept json
+// @Produce json
+// @Param request body requests.CreatePaymentRequest true "Create payment request"
+// @Security BearerAuth
+// @Success 201 {object} responses.PaymentResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/payments [post]
 func CreatePayment(c *gin.Context) {
 	var req requests.CreatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -98,6 +110,17 @@ func CreatePayment(c *gin.Context) {
 	c.JSON(http.StatusCreated, res)
 }
 
+// GetPaymentHistoryByCustomerID godoc
+// @Summary Get customer payment history
+// @Description Get all payments for a specific customer
+// @Tags Payments
+// @Accept json
+// @Produce json
+// @Param customer_id path string true "Customer ID"
+// @Security BearerAuth
+// @Success 200 {array} responses.PaymentResponse
+// @Failure 400 {object} map[string]interface{}
+// @Router /api/payments/customer/{customer_id} [get]
 func GetPaymentHistoryByCustomerID(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	customerIDStr := c.Param("customer_id")
@@ -120,6 +143,16 @@ func GetPaymentHistoryByCustomerID(c *gin.Context) {
 	c.JSON(http.StatusOK, payments)
 }
 
+// GetAllPayments godoc
+// @Summary List all payments
+// @Description Get all payments for the tenant
+// @Tags Payments
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} responses.PaymentResponse
+// @Failure 401 {object} map[string]interface{}
+// @Router /api/payments [get]
 func GetAllPayments(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 

@@ -13,6 +13,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// CreateWaterUsage godoc
+// @Summary Create water usage record
+// @Description Record water meter reading and calculate usage
+// @Tags Water Usage
+// @Accept json
+// @Produce json
+// @Param request body requests.CreateWaterUsageRequest true "Create water usage request"
+// @Security BearerAuth
+// @Success 201 {object} responses.WaterUsageResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/water-usage [post]
 func CreateWaterUsage(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 
@@ -113,6 +125,18 @@ func CreateWaterUsage(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
+// GetWaterUsages godoc
+// @Summary List water usage records
+// @Description Get all water usage records for the tenant
+// @Tags Water Usage
+// @Accept json
+// @Produce json
+// @Param customer_id query string false "Filter by customer ID"
+// @Param period query string false "Filter by period (YYYY-MM)"
+// @Security BearerAuth
+// @Success 200 {array} responses.WaterUsageResponse
+// @Failure 401 {object} map[string]interface{}
+// @Router /api/water-usage [get]
 func GetWaterUsages(c *gin.Context) {
 	tenantID := c.MustGet("tenant_id").(uuid.UUID)
 	var records []models.WaterUsage

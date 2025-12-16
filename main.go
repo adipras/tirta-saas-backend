@@ -1,23 +1,42 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 
 	"github.com/adipras/tirta-saas-backend/config"
+	_ "github.com/adipras/tirta-saas-backend/docs"
 	"github.com/adipras/tirta-saas-backend/middleware"
 	"github.com/adipras/tirta-saas-backend/pkg/logger"
+	"github.com/adipras/tirta-saas-backend/pkg/seeder"
 	"github.com/adipras/tirta-saas-backend/routes"
-
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humagin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
+
+// @title Tirta SaaS Backend API
+// @version 1.0
+// @description Multi-Tenant Water Utility Billing System - Complete SaaS solution for water utility companies
+// @termsOfService https://tirtasaas.com/terms
+
+// @contact.name Tirta SaaS Support
+// @contact.email support@tirtasaas.com
+// @contact.url https://tirtasaas.com/support
+
+// @license.name Proprietary
+// @license.url https://tirtasaas.com/license
+
+// @host localhost:8081
+// @BasePath /
+// @schemes http https
+
+// @securityDefinitions.apikey Bearer
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
 	err := godotenv.Load()
@@ -27,6 +46,13 @@ func main() {
 
 	config.ConnectDB()
 	config.Migrate()
+
+	// Auto-seed default platform admin if none exists
+	if os.Getenv("AUTO_SEED_ADMIN") == "true" {
+		if err := seeder.SeedDefaultPlatformAdmin(); err != nil {
+			log.Printf("⚠️  Warning: Failed to seed platform admin: %v", err)
+		}
+	}
 
 	// Get port configuration
 	port := os.Getenv("PORT")
@@ -49,102 +75,10 @@ func main() {
 	r.Use(middleware.RequestTracingMiddleware())
 	r.Use(middleware.PerformanceMonitoringMiddleware())
 
-	// Setup Huma API for auto-documentation
-	humaConfig := huma.DefaultConfig("Tirta SaaS Backend API", "1.0.0")
-	humaConfig.Info.Description = `
-# Multi-Tenant Water Utility Billing System
-
-Complete SaaS solution for water utility companies (Paguyuban Air Bersih) to manage:
-- **Customer Registration** - Register new water customers with meter assignment
-- **Water Usage Tracking** - Record monthly meter readings and calculate usage
-- **Invoice Generation** - Automated monthly billing based on usage and tariffs
-- **Payment Processing** - Handle customer payments and track payment status
-- **User Management** - Manage tenant admins and operators
-- **Platform Management** - Platform owner tools for managing all tenants
-- **Analytics & Reporting** - Real-time statistics and revenue tracking
-
-## Authentication
-
-Most endpoints require JWT authentication. To authenticate:
-
-1. Register a tenant via **POST /auth/register**
-2. Login via **POST /auth/login** to get JWT token
-3. Include token in **Authorization** header: ` + "`Bearer <your-token>`" + `
-
-Customer authentication:
-- **POST /auth/customer/login** - Customer login endpoint
-
-## Multi-Tenancy
-
-Each tenant (water utility company) has complete data isolation. All operations are automatically scoped to the authenticated user's tenant.
-
-## Rate Limiting
-
-API endpoints are rate-limited to ensure fair usage and system stability.
-
-## Support
-
-For support, email: support@tirtasaas.com
-`
-	humaConfig.Info.Contact = &huma.Contact{
-		Name:  "Tirta SaaS Support",
-		Email: "support@tirtasaas.com",
-		URL:   "https://tirtasaas.com/support",
-	}
-	humaConfig.Info.License = &huma.License{
-		Name: "Proprietary",
-		URL:  "https://tirtasaas.com/license",
-	}
-	humaConfig.Servers = []*huma.Server{
-		{URL: "http://localhost:8081", Description: "Development server"},
-		{URL: "https://api.tirtasaas.com", Description: "Production server"},
-	}
-	
-	// Configure security schemes
-	humaConfig.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
-		"bearerAuth": {
-			Type:         "http",
-			Scheme:       "bearer",
-			BearerFormat: "JWT",
-			Description:  "JWT token from /auth/login endpoint. Include as: Authorization: Bearer <token>",
-		},
-	}
-
-	// Create Huma API (auto-generates OpenAPI 3.1)
-	api := humagin.New(r, humaConfig)
-
-	// Register example Huma endpoint (with auto-documentation)
-	huma.Register(api, huma.Operation{
-		OperationID: "health-check-v2",
-		Method:      "GET",
-		Path:        "/api/v2/health",
-		Summary:     "Health Check",
-		Description: "Check if the API is running and healthy",
-		Tags:        []string{"Health & Monitoring"},
-	}, func(ctx context.Context, input *struct{}) (*struct {
-		Body struct {
-			Status  string `json:"status" example:"healthy" doc:"System status"`
-			Service string `json:"service" example:"tirta-saas-backend" doc:"Service name"`
-			Version string `json:"version" example:"1.0.0" doc:"API version"`
-		}
-	}, error) {
-		resp := &struct {
-			Body struct {
-				Status  string `json:"status" example:"healthy" doc:"System status"`
-				Service string `json:"service" example:"tirta-saas-backend" doc:"Service name"`
-				Version string `json:"version" example:"1.0.0" doc:"API version"`
-			}
-		}{}
-		resp.Body.Status = "healthy"
-		resp.Body.Service = "tirta-saas-backend"
-		resp.Body.Version = "1.0.0"
-		return resp, nil
-	})
-
-	// Legacy Swagger UI (keep for backward compatibility)
+	// Swagger UI endpoint for API documentation
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
-	// Register all existing Gin routes (backward compatible)
+	
+	// Register all application routes
 	routes.HealthRoutes(r)
 	routes.AuthRoutes(r)
 	routes.ProtectedRoutes(r)
@@ -157,13 +91,17 @@ For support, email: support@tirtasaas.com
 	routes.PaymentRoutes(r)
 	routes.RegisterTenantUserRoutes(r)
 	routes.PlatformRoutes(r)
+	
+	// Master Data & Settings Routes
+	routes.ServiceAreaRoutes(r)
+	routes.PaymentMethodRoutes(r)
+	routes.TariffRoutes(r)
+	routes.UserManagementRoutes(r)
 
 	logger.Info("🚀 Server ready and listening", map[string]interface{}{
-		"port":         port,
-		"swagger":      "http://localhost:" + port + "/swagger/index.html",
-		"huma_docs":    "http://localhost:" + port + "/docs",
-		"openapi_json": "http://localhost:" + port + "/openapi.json",
-		"openapi_yaml": "http://localhost:" + port + "/openapi.yaml",
+		"port":    port,
+		"swagger": "http://localhost:" + port + "/swagger/index.html",
+		"health":  "http://localhost:" + port + "/health",
 	})
 	r.Run(":" + port)
 }
