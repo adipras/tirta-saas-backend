@@ -69,8 +69,13 @@ func main() {
 	})
 
 	r := gin.Default()
+	
+	// Disable automatic trailing slash redirects
+	r.RedirectTrailingSlash = false
+	r.RedirectFixedPath = false
 
 	// Global middleware
+	r.Use(middleware.HandleTrailingSlash())
 	r.Use(middleware.CORSMiddleware())
 	r.Use(middleware.RequestTracingMiddleware())
 	r.Use(middleware.PerformanceMonitoringMiddleware())
@@ -91,6 +96,7 @@ func main() {
 	routes.PaymentRoutes(r)
 	routes.RegisterTenantUserRoutes(r)
 	routes.PlatformRoutes(r)
+	routes.ReportRoutes(r)
 	
 	// Master Data & Settings Routes
 	routes.ServiceAreaRoutes(r)

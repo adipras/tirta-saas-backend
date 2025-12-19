@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"github.com/adipras/tirta-saas-backend/helpers"
 	"net/http"
 	"time"
 
@@ -12,7 +13,15 @@ import (
 )
 
 func CreateWaterRate(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 
 	var input struct {
 		Amount         float64   `json:"amount"`
@@ -53,13 +62,20 @@ func CreateWaterRate(c *gin.Context) {
 }
 
 func GetWaterRates(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
-	var rates []models.WaterRate
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	if err := config.DB.Preload("Subscription").
-		Where("tenant_id = ?", tenantID).
-		Order("effective_date DESC").
-		Find(&rates).Error; err != nil {
+	var rates []models.WaterRate
+	query := config.DB.Preload("Subscription")
+	
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	
+	if err := query.Order("effective_date DESC").Find(&rates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data"})
 		return
 	}
@@ -67,8 +83,55 @@ func GetWaterRates(c *gin.Context) {
 	c.JSON(http.StatusOK, rates)
 }
 
+// GetCurrentWaterRate godoc
+// @Summary Get current active water rate
+// @Description Get the currently active water rate for a tenant
+// @Tags Water Rates
+// @Accept json
+// @Produce json
+// @Param subscription_id query string false "Filter by subscription type ID"
+// @Security BearerAuth
+// @Success 200 {object} models.WaterRate
+// @Failure 404 {object} map[string]interface{}
+// @Router /api/water-rates/current [get]
+func GetCurrentWaterRate(c *gin.Context) {
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	query := config.DB.Preload("Subscription").Where("active = ?", true)
+	
+	// Filter by tenant if specified
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	
+	// Optional filter by subscription type
+	if subscriptionID := c.Query("subscription_id"); subscriptionID != "" {
+		query = query.Where("subscription_id = ?", subscriptionID)
+	}
+	
+	var rate models.WaterRate
+	if err := query.Order("effective_date DESC").First(&rate).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No active water rate found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, rate)
+}
+
 func UpdateWaterRate(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	rateID, err := uuid.Parse(id)
@@ -122,7 +185,15 @@ func UpdateWaterRate(c *gin.Context) {
 }
 
 func DeleteWaterRate(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	rateID, err := uuid.Parse(id)

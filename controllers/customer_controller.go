@@ -4,13 +4,13 @@ import (
 	"net/http"
 
 	"github.com/adipras/tirta-saas-backend/config"
+	"github.com/adipras/tirta-saas-backend/helpers"
 	"github.com/adipras/tirta-saas-backend/models"
 	"github.com/adipras/tirta-saas-backend/requests"
 	"github.com/adipras/tirta-saas-backend/responses"
+	"github.com/adipras/tirta-saas-backend/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/adipras/tirta-saas-backend/utils"
 )
 
 // CreateCustomer godoc
@@ -32,12 +32,11 @@ func CreateCustomer(c *gin.Context) {
 		return
 	}
 
-	tenantIDValue, exists := c.Get("tenant_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	tenantID, err := helpers.RequireTenantID(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	tenantID := tenantIDValue.(uuid.UUID)
 
 	// Ambil SubscriptionType
 	var subType models.SubscriptionType
@@ -124,12 +123,22 @@ func CreateCustomer(c *gin.Context) {
 // @Failure 401 {object} map[string]interface{}
 // @Router /api/customers [get]
 func GetCustomers(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
-	var customers []models.Customer
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	if err := config.DB.Preload("Subscription").
-		Where("tenant_id = ?", tenantID).
-		Find(&customers).Error; err != nil {
+	var customers []models.Customer
+	query := config.DB.Preload("Subscription")
+	
+	// If has specific tenant, filter by it
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	// If no specific tenant (platform owner without filter), return all
+
+	if err := query.Find(&customers).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data"})
 		return
 	}
@@ -169,13 +178,22 @@ func GetCustomers(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/customers/{id} [get]
 func GetCustomer(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	id := c.Param("id")
 	
 	var customer models.Customer
-	if err := config.DB.Preload("Subscription").
-		Where("id = ? AND tenant_id = ?", id, tenantID).
-		First(&customer).Error; err != nil {
+	query := config.DB.Preload("Subscription").Where("id = ?", id)
+	
+	// If has specific tenant, add tenant filter
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	
+	if err := query.First(&customer).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Customer not found"})
 		return
 	}
@@ -207,11 +225,22 @@ func GetCustomer(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/customers/{id} [put]
 func UpdateCustomer(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	id := c.Param("id")
 
 	var customer models.Customer
-	if err := config.DB.Where("id = ? AND tenant_id = ?", id, tenantID).First(&customer).Error; err != nil {
+	query := config.DB.Where("id = ?", id)
+	
+	// If has specific tenant, add tenant filter
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	
+	if err := query.First(&customer).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Pelanggan tidak ditemukan"})
 		return
 	}
@@ -258,10 +287,21 @@ func UpdateCustomer(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/customers/{id} [delete]
 func DeleteCustomer(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	id := c.Param("id")
 
-	if err := config.DB.Where("id = ? AND tenant_id = ?", id, tenantID).Delete(&models.Customer{}).Error; err != nil {
+	query := config.DB.Where("id = ?", id)
+	
+	// If has specific tenant, add tenant filter
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+
+	if err := query.Delete(&models.Customer{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menghapus pelanggan"})
 		return
 	}

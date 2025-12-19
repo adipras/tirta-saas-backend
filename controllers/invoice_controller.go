@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"github.com/adipras/tirta-saas-backend/helpers"
 	"net/http"
 
 	"github.com/adipras/tirta-saas-backend/config"
@@ -38,7 +39,19 @@ func GenerateMonthlyInvoice(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+
+	if err != nil {
+
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+
+		return
+
+
+	}
 
 	// Ambil semua WaterUsage bulan tsb yang belum dibuatkan Invoice
 	var usages []models.WaterUsage
@@ -138,12 +151,20 @@ func GenerateMonthlyInvoice(c *gin.Context) {
 // @Failure 401 {object} map[string]interface{}
 // @Router /api/invoices [get]
 func GetInvoices(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
-	var invoices []models.Invoice
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	if err := config.DB.Preload("Customer").
-		Where("tenant_id = ?", tenantID).
-		Find(&invoices).Error; err != nil {
+	var invoices []models.Invoice
+	query := config.DB.Preload("Customer")
+	
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	
+	if err := query.Find(&invoices).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data"})
 		return
 	}
@@ -186,7 +207,15 @@ func GetInvoices(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/invoices/{id} [get]
 func GetInvoice(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	invoiceID, err := uuid.Parse(id)
@@ -220,7 +249,15 @@ func GetInvoice(c *gin.Context) {
 }
 
 func UpdateInvoice(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	invoiceID, err := uuid.Parse(id)
@@ -280,7 +317,15 @@ func UpdateInvoice(c *gin.Context) {
 }
 
 func DeleteInvoice(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	invoiceID, err := uuid.Parse(id)

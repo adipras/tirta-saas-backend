@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/adipras/tirta-saas-backend/config"
+	"github.com/adipras/tirta-saas-backend/helpers"
 	"github.com/adipras/tirta-saas-backend/models"
 	"github.com/adipras/tirta-saas-backend/requests"
 	"github.com/adipras/tirta-saas-backend/responses"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 // CreateWaterUsage godoc
@@ -26,7 +26,15 @@ import (
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/water-usage [post]
 func CreateWaterUsage(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 
 	var req requests.CreateWaterUsageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -138,13 +146,20 @@ func CreateWaterUsage(c *gin.Context) {
 // @Failure 401 {object} map[string]interface{}
 // @Router /api/water-usage [get]
 func GetWaterUsages(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
-	var records []models.WaterUsage
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	if err := config.DB.Preload("Customer").
-		Where("tenant_id = ?", tenantID).
-		Order("created_at DESC").
-		Find(&records).Error; err != nil {
+	var records []models.WaterUsage
+	query := config.DB.Preload("Customer")
+	
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	
+	if err := query.Order("created_at DESC").Find(&records).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data"})
 		return
 	}
@@ -173,7 +188,15 @@ func GetWaterUsages(c *gin.Context) {
 
 func GetWaterUsageByID(c *gin.Context) {
 	id := c.Param("id")
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 
 	var usage models.WaterUsage
 	if err := config.DB.Preload("Customer").
@@ -198,7 +221,15 @@ func GetWaterUsageByID(c *gin.Context) {
 
 func UpdateWaterUsage(c *gin.Context) {
 	id := c.Param("id")
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 
 	var input struct {
 		MeterEnd float64 `json:"meter_end"`
@@ -280,7 +311,15 @@ func UpdateWaterUsage(c *gin.Context) {
 
 func DeleteWaterUsage(c *gin.Context) {
 	id := c.Param("id")
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 
 	var usage models.WaterUsage
 	if err := config.DB.Where("id = ? AND tenant_id = ?", id, tenantID).First(&usage).Error; err != nil {

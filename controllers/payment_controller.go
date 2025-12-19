@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"github.com/adipras/tirta-saas-backend/helpers"
 	"fmt"
 	"net/http"
 
@@ -32,7 +33,19 @@ func CreatePayment(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+
+	if err != nil {
+
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+
+		return
+
+
+	}
 
 	// Ambil invoice terkait
 	var invoice models.Invoice
@@ -122,7 +135,15 @@ func CreatePayment(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Router /api/payments/customer/{customer_id} [get]
 func GetPaymentHistoryByCustomerID(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	customerIDStr := c.Param("customer_id")
 
 	customerID, err := uuid.Parse(customerIDStr)
@@ -154,13 +175,20 @@ func GetPaymentHistoryByCustomerID(c *gin.Context) {
 // @Failure 401 {object} map[string]interface{}
 // @Router /api/payments [get]
 func GetAllPayments(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	var payments []models.Payment
-	if err := config.DB.Preload("Invoice").
-		Where("tenant_id = ?", tenantID).
-		Order("created_at desc").
-		Find(&payments).Error; err != nil {
+	query := config.DB.Preload("Invoice")
+	
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	
+	if err := query.Order("created_at desc").Find(&payments).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data pembayaran"})
 		return
 	}
@@ -169,7 +197,15 @@ func GetAllPayments(c *gin.Context) {
 }
 
 func GetPayment(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	paymentID, err := uuid.Parse(id)
@@ -190,7 +226,15 @@ func GetPayment(c *gin.Context) {
 }
 
 func UpdatePayment(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	paymentID, err := uuid.Parse(id)
@@ -269,7 +313,15 @@ func UpdatePayment(c *gin.Context) {
 }
 
 func DeletePayment(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	paymentID, err := uuid.Parse(id)

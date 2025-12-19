@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"github.com/adipras/tirta-saas-backend/helpers"
 	"net/http"
 
 	"github.com/adipras/tirta-saas-backend/config"
@@ -29,7 +30,19 @@ func CreateSubscriptionType(c *gin.Context) {
 		return
 	}
 
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+
+	if err != nil {
+
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+
+		return
+
+
+	}
 
 	sub := models.SubscriptionType{
 		Name:            req.Name,
@@ -73,10 +86,20 @@ func CreateSubscriptionType(c *gin.Context) {
 // @Failure 401 {object} map[string]interface{}
 // @Router /api/subscription-types [get]
 func GetAllSubscriptionTypes(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, hasSpecificTenant, err := helpers.GetTenantIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	var subscriptions []models.SubscriptionType
-	if err := config.DB.Where("tenant_id = ?", tenantID).Find(&subscriptions).Error; err != nil {
+	query := config.DB
+	
+	if hasSpecificTenant {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	
+	if err := query.Find(&subscriptions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data subscription types"})
 		return
 	}
@@ -113,7 +136,15 @@ func GetAllSubscriptionTypes(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/subscription-types/{id} [get]
 func GetSubscriptionType(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	subID, err := uuid.Parse(id)
@@ -157,7 +188,15 @@ func GetSubscriptionType(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/subscription-types/{id} [put]
 func UpdateSubscriptionType(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	subID, err := uuid.Parse(id)
@@ -219,7 +258,15 @@ func UpdateSubscriptionType(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /api/subscription-types/{id} [delete]
 func DeleteSubscriptionType(c *gin.Context) {
-	tenantID := c.MustGet("tenant_id").(uuid.UUID)
+	tenantID, err := helpers.RequireTenantID(c)
+
+	if err != nil {
+
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+		return
+
+	}
 	id := c.Param("id")
 
 	subID, err := uuid.Parse(id)

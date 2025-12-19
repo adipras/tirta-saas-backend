@@ -7,7 +7,7 @@ import (
 )
 
 func AuthRoutes(r *gin.Engine) {
-	auth := r.Group("/auth")
+	auth := r.Group("/api/auth")
 	{
 		// Admin/Operator authentication
 		auth.POST("/register", controllers.Register)
@@ -21,7 +21,7 @@ func AuthRoutes(r *gin.Engine) {
 	}
 	
 	// Admin-only endpoint to create customer accounts
-	adminAuth := r.Group("/auth")
+	adminAuth := r.Group("/api/auth")
 	adminAuth.Use(middleware.JWTAuthMiddleware(), middleware.AdminOnly())
 	{
 		adminAuth.POST("/customer/create", controllers.CreateCustomerAccount)

@@ -11,9 +11,9 @@ func WaterUsageRoutes(r *gin.Engine) {
 	group := r.Group("/api/water-usage")
 	group.Use(middleware.JWTAuthMiddleware(), middleware.AdminOnly())
 
-	group.POST("/", controllers.CreateWaterUsage)
-	group.GET("/", controllers.GetWaterUsages)
-	group.GET("/:id", controllers.GetWaterUsageByID)
-	group.PUT("/:id", controllers.UpdateWaterUsage)
-	group.DELETE("/:id", controllers.DeleteWaterUsage)
+	group.POST("", controllers.CreateWaterUsage)
+	group.GET("", controllers.GetWaterUsages)
+	group.GET(":id", controllers.GetWaterUsageByID)
+	group.PUT(":id", controllers.UpdateWaterUsage)
+	group.DELETE(":id", controllers.DeleteWaterUsage)
 }
